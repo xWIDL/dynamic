@@ -85,6 +85,11 @@ translateExpr = \case
     ES.FuncExpr l Nothing params stmts -> do
         s <- translateStmts stmts
         return $ Closure l (map idToName params) s
+    ES.InfixExpr _ op e1 e2 -> do
+        op' <- translateInfixOp op
+        e1' <- translateExpr e1
+        e2' <- translateExpr e2
+        return $ InfixExpr e1' op' e2'
     other -> Left $ "Can't translate Expr " ++ show other
 
 translateVarDecl :: Show a => ES.VarDecl a -> Either String (Stmt a)
@@ -98,6 +103,13 @@ translateProp :: Show a => ES.Prop a -> Either String Name
 translateProp (ES.PropId _ x) = return $ idToName x
 translateProp (ES.PropString _ x) = return $ Name x
 translateProp other = Left $ "Can't translate Prop " ++ show other
+
+translateInfixOp :: ES.InfixOp -> Either String InfixOp
+translateInfixOp ES.OpMul = return OMult
+translateInfixOp ES.OpDiv = return ODiv
+translateInfixOp ES.OpSub = return OSubs
+translateInfixOp ES.OpAdd = return OPlus
+translateInfixOp other    = Left $ "Can't translate InfixOp " ++ show other
 
 idToName :: ES.Id a -> Name
 idToName i = Name $ ES.unId i
