@@ -19,5 +19,8 @@ data Env = Env {
 
 $(makeLenses ''Env)
 
+initEnv :: Env
+initEnv = Env M.empty M.empty
+
 bindValue :: Name -> Value -> Env -> Env
 bindValue x v = bindings %~ M.insert x v
