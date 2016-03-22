@@ -6,10 +6,11 @@ module AST where
 import Flow
 import Data.Set hiding (foldr, map)
 import qualified Data.Set as S
+import qualified Data.Map as M
 
 type Program a = Stmt a
 
-newtype Name = Name String deriving (Show, Eq)
+newtype Name = Name String deriving (Show, Eq, Ord)
 
 data Stmt a = VarDecl a Name
             | Assign a Name (Expr a)
@@ -63,3 +64,15 @@ instance Label a => Flow Stmt a where
     flow (While l _ s)  = singleton (l, initLabel s) `union` (S.map (,l) (finalLabels s))
     flow (Seq s1 s2)    = flow s1 `union` S.map (,initLabel s2) (finalLabels s1) `union` flow s2
     flow _              = empty
+
+labelsOf :: Label a => Stmt a -> M.Map a (Stmt a)
+labelsOf s = case s of
+    VarDecl l _     -> M.singleton l s
+    Assign l _ _    -> M.singleton l s
+    If l _ s1 s2    -> M.singleton l s `M.union` labelsOf s1 `M.union` labelsOf s2
+    While l _ s     -> M.singleton l s `M.union` labelsOf s
+    BreakStmt l     -> M.singleton l s
+    ContStmt l      -> M.singleton l s
+    Skip l          -> M.singleton l s
+    ReturnStmt l _  -> M.singleton l s
+    Seq s1 s2       -> labelsOf s1 `M.union` labelsOf s2
