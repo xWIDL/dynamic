@@ -25,7 +25,11 @@ process labelDict flows = process'
             updateEnvWith_ (unionEnv env)
             stmt <- lookupM l2 labelDict
             case stmt of
-                VarDecl _ x -> updateEnvWith_ (bindValue x (VPrim PrimNull)) >> cont oldState
+                VarDecl l x mExpr -> do
+                    val <- case mExpr of
+                            Nothing -> return $ VPrim PrimNull
+                            Just e  -> interpret l e
+                    updateEnvWith_ (bindValue x val) >> cont oldState
                 Assign l x expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState
                 ReturnStmt l mExpr -> case mExpr of
                     Nothing -> return Nothing

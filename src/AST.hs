@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses,
-             FlexibleContexts, TupleSections #-}
+             FlexibleContexts, TupleSections,
+             DeriveTraversable, DeriveFunctor,
+             DeriveFoldable #-}
 
 module AST where
 
@@ -15,7 +17,7 @@ newtype Name = Name String deriving (Eq, Ord)
 instance Show Name where
     show (Name x) = x
 
-data Stmt a = VarDecl a Name
+data Stmt a = VarDecl a Name (Maybe (Expr a))
             | Assign a Name (Expr a)
             | If a (Expr a) (Stmt a) (Stmt a)
             | While a (Expr a) (Stmt a)
@@ -24,7 +26,7 @@ data Stmt a = VarDecl a Name
             | Skip a
             | ReturnStmt a (Maybe (Expr a))
             | Seq (Stmt a) (Stmt a)
-            deriving (Show, Eq)
+            deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Expr a = PrimLit Prim
             | ObjExpr [(Name, Expr a)]
@@ -33,7 +35,7 @@ data Expr a = PrimLit Prim
             | InfixExpr (Expr a) InfixOp (Expr a)
             | CallExpr (Expr a) [Expr a]
             | Closure a [Name] (Stmt a)
-            deriving (Show, Eq)
+            deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Prim = PrimInt Int | PrimBool Bool | PrimNull | PrimUndefined deriving (Show, Eq)
 
@@ -42,7 +44,7 @@ data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Show, Eq)
 -- Flow implementation
 
 instance Label a => Flow Stmt a where
-    initLabel (VarDecl l _)         = l
+    initLabel (VarDecl l _ _)       = l
     initLabel (Assign l _ _)        = l
     initLabel (If l _ _ _)          = l
     initLabel (While l _ _)         = l
@@ -52,7 +54,7 @@ instance Label a => Flow Stmt a where
     initLabel (ReturnStmt l _)      = l
     initLabel (Seq s _)             = initLabel s
 
-    finalLabels (VarDecl l _)       = singleton l
+    finalLabels (VarDecl l _ _)     = singleton l
     finalLabels (Assign l _ _)      = singleton l
     finalLabels (If _ _ s1 s2)      = finalLabels s1 `union` finalLabels s2
     finalLabels (While l _ _)       = singleton l
@@ -70,7 +72,7 @@ instance Label a => Flow Stmt a where
 
 labelsOf :: Label a => Stmt a -> M.Map a (Stmt a)
 labelsOf s = case s of
-    VarDecl l _     -> M.singleton l s
+    VarDecl l _ _   -> M.singleton l s
     Assign l _ _    -> M.singleton l s
     If l _ s1 s2    -> M.singleton l s `M.union` labelsOf s1 `M.union` labelsOf s2
     While l _ s     -> M.singleton l s `M.union` labelsOf s
