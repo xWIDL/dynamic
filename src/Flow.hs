@@ -9,4 +9,4 @@ class Label a => Flow ast a where
     finalLabels :: ast a -> Set a
     flow :: ast a -> Set (a, a)
 
-class Ord a => Label a where
+class (Ord a, Show a) => Label a where
