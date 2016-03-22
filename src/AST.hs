@@ -10,7 +10,10 @@ import qualified Data.Map as M
 
 type Program a = Stmt a
 
-newtype Name = Name String deriving (Show, Eq, Ord)
+newtype Name = Name String deriving (Eq, Ord)
+
+instance Show Name where
+    show (Name x) = x
 
 data Stmt a = VarDecl a Name
             | Assign a Name (Expr a)
@@ -29,7 +32,7 @@ data Expr a = PrimLit Prim
             | GetExpr (Expr a) Name
             | InfixExpr (Expr a) InfixOp (Expr a)
             | CallExpr (Expr a) [Expr a]
-            | Closure [Name] (Stmt a)
+            | Closure a [Name] (Stmt a)
             deriving (Show, Eq)
 
 data Prim = PrimInt Int | PrimBool Bool | PrimNull | PrimUndefined deriving (Show, Eq)
