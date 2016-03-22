@@ -18,6 +18,8 @@ cabal-version:       >=1.10
 library
   exposed-modules:     AST
                        Flow
+                       Core
+                       Model
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.8 && <4.9, containers
