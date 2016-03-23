@@ -37,7 +37,7 @@ data Expr a = PrimLit Prim
             | Closure a [Name] (Stmt a)
             deriving (Show, Eq, Functor, Foldable, Traversable)
 
-data Prim = PrimInt Int | PrimBool Bool | PrimNull | PrimUndefined deriving (Show, Eq)
+data Prim = PrimNum Double | PrimBool Bool | PrimStr String | PrimNull | PrimUndefined deriving (Show, Eq)
 
 data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Show, Eq)
 

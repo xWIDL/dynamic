@@ -67,8 +67,10 @@ translateExprStmt _ other = Left $ "Can't translate " ++ show other
 
 translateExpr :: Show a => ES.Expression a -> Either String (Expr a)
 translateExpr = \case
-    ES.IntLit _ x    -> return $ PrimLit (PrimInt x)
+    ES.NumLit _ x    -> return $ PrimLit (PrimNum x)
+    ES.IntLit _ x    -> return $ PrimLit (PrimNum (fromIntegral x))
     ES.BoolLit _ x   -> return $ PrimLit (PrimBool x)
+    ES.StringLit _ x -> return $ PrimLit (PrimStr x)
     ES.NullLit _     -> return $ PrimLit PrimNull
     ES.ObjectLit _ m -> do
         props' <- mapM (translateProp . fst) m
