@@ -6,6 +6,10 @@ import AST
 import qualified Data.Map as M
 import Control.Lens
 
+-- Call String
+
+type CallString label = [label]
+
 -- Scope Chain
 
 data ScopeChain label = TopLevel
@@ -31,7 +35,7 @@ data Value a = VPrim Prim
 --- wondering how to do it correctly.
 data Object a = Object (M.Map Name (Value a))
               -- FIXME: Actually, [Function] is also an object ... but we don't model this temporarily
-              | OClos (ScopeChain a) [Name] (Stmt a)
+              | OClos (ScopeChain a) (CallString a) [Name] (Stmt a)
               | OTop -- FIXME: ...
               deriving (Show, Eq)
 
@@ -102,7 +106,7 @@ reachableFrom m (VRef r) =
     case M.lookup r m of
         Nothing -> M.empty -- FIXME: Is this sound?
         Just o  -> case o of
-            Object dict -> foldr M.union M.empty (map (reachableFrom m) (M.elems dict))
-            OClos _ _ _ -> M.singleton r o
-            OTop -> m -- XXX: Wow, Magic!
+            Object dict   -> foldr M.union M.empty (map (reachableFrom m) (M.elems dict))
+            OClos _ _ _ _ -> M.singleton r o
+            OTop          -> m -- XXX: Wow, Magic!
 reachableFrom m VTop     = m -- XXX: Wow, Magic!
