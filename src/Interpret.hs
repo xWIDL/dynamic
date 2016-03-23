@@ -21,9 +21,13 @@ process :: Label label => M.Map label (Stmt label) -> S.Set (label, label) ->
 process labelDict flows = process'
     where
         process' _ _ [] = return Nothing
-        process' chain cstr ((l1, l2) : wl') = do
+        process' chain cstr wl@((l1, l2) : wl') = do
             oldState <- get
-            tell $ "========== State ==========\n" ++ showState oldState ++ "\n"
+            tell $ "========== State ==========\n"
+            tell $ "|| chain: " ++ show chain ++ "\n"
+            tell $ "|| cstr: " ++ show cstr ++ "\n"
+            tell $ "|| wl: " ++ show wl ++ "\n"
+            tell $ showState oldState ++ "\n"
 
             env <- lookupM (l1, chain, cstr) oldState
             updateEnvWith_ (unionEnv env)

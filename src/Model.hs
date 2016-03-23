@@ -49,7 +49,8 @@ data Env a = Env {
 } deriving (Eq)
 
 instance Show a => Show (Env a) where
-    show env = "bindings:\n" ++ concatMap (\(Name x, v) -> x ++ "\t" ++ show v ++ "\n") (M.toList (_bindings env)) ++
+    show env = "refCount: " ++ show (_refCount env) ++ "\n" ++
+               "bindings:\n" ++ concatMap (\(Name x, v) -> x ++ "\t" ++ show v ++ "\n") (M.toList (_bindings env)) ++
                "store:\n" ++ concatMap (\(Ref i, o) -> show i ++ "\t" ++ show o ++ "\n") (M.toList (_store env))
 
 $(makeLenses ''Env)
@@ -79,7 +80,7 @@ unionObject :: Eq a => Object a -> Object a -> Object a
 unionObject o1 o2 = if o1 == o2 then o1 else OTop -- FIXME: Wow, So Magic!
 
 unionRef :: Ref -> Ref -> Ref
-unionRef (Ref i1) (Ref i2) = Ref (max i1 i2)
+unionRef (Ref i1) (Ref i2) = Ref i1 -- FIXME: Seriously?
 
 bindValue :: Name -> Value a -> Env a -> Env a
 bindValue x v = bindings %~ M.insert x v
