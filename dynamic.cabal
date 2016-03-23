@@ -15,8 +15,9 @@ build-type:          Simple
 -- extra-source-files:
 cabal-version:       >=1.10
 
-library
-  exposed-modules:     AST
+executable dynamic
+  main-is:             Main.hs
+  other-modules:       AST
                        Flow
                        Interpret
                        Model

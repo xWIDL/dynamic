@@ -15,6 +15,17 @@ type WorkList label = [(label, label)]
 
 type Interpret label = StateT (InterpretState label) (ExceptT String (Writer String))
 
+interpret :: Label a => a -> Stmt a->
+            (Either String (Maybe (Value a, M.Map Ref (Object a), Ref), InterpretState a)
+            , String)
+interpret start prog =
+    let flows = flow prog
+        labelDict = labelsOf prog
+        startTask = (start, initLabel prog)
+        proc = process labelDict flows TopLevel [] (startTask : S.toList flows)
+        (ret, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
+    in  runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
+
 process :: Label label => M.Map label (Stmt label) -> S.Set (label, label) ->
                           ScopeChain label -> CallString label -> WorkList label ->
                           Interpret label (Maybe ((Value label), M.Map Ref (Object label), Ref))
@@ -145,16 +156,6 @@ lookupM :: (MonadError String m, Show k, Ord k) => k -> M.Map k v -> m v
 lookupM k m = case M.lookup k m of
     Just v  -> return v
     Nothing -> throwError $ "Can't find " ++ show k
-
-driver :: Label label => label -> Program label -> String
-driver start prog =
-    let flows = flow prog
-        labelDict = labelsOf prog
-        startTask = (start, initLabel prog)
-        proc = process labelDict flows TopLevel [] (startTask : S.toList flows)
-        (_, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
-    in  logging
-
 
 showState :: Show l => InterpretState l -> String
 showState = unlines . map (\((l, sc, cstr), env) -> "--------- Env " ++ show l ++ "----------\n" ++
