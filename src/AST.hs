@@ -68,7 +68,7 @@ instance Show a => Show (Expr a) where
     show (GetExpr e x) = "(" ++ show e ++ ")." ++ show x
     show (InfixExpr e1 op e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
     show (CallExpr e args) = "(" ++ show e ++ ")(" ++ sepByComma (map show args) ++ ")"
-    show (Closure a args body) = "function (" ++ sepByComma (map show args) ++ ") {\n" ++ indent (show body) ++ "}"
+    show (Closure a args body) = "function " ++ show a ++ " (" ++ sepByComma (map show args) ++ ") {\n" ++ indent (show body) ++ "}"
 
 instance Show Prim where
     show (PrimNum d)  = show d

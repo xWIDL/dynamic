@@ -8,11 +8,12 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Monad.State
 import Control.Monad.Except
+import Control.Monad.Writer
 
 type InterpretState label = M.Map (label, ScopeChain label, CallString label) (Env label)
 type WorkList label = [(label, label)]
 
-type Interpret label = ExceptT String (State (InterpretState label))
+type Interpret label = StateT (InterpretState label) (ExceptT String (Writer String))
 
 process :: Label label => M.Map label (Stmt label) -> S.Set (label, label) ->
                           ScopeChain label -> CallString label -> WorkList label ->
@@ -22,6 +23,8 @@ process labelDict flows = process'
         process' _ _ [] = return Nothing
         process' chain cstr ((l1, l2) : wl') = do
             oldState <- get
+            tell $ "========== State ==========\n" ++ showState oldState ++ "\n"
+
             env <- lookupM (l1, chain, cstr) oldState
             updateEnvWith_ (unionEnv env)
             stmt <- lookupM l2 labelDict
@@ -139,11 +142,19 @@ lookupM k m = case M.lookup k m of
     Just v  -> return v
     Nothing -> throwError $ "Can't find " ++ show k
 
-driver :: Label label => label -> Program label ->
-          (Either String (Maybe ((Value label), M.Map Ref (Object label), Ref)), InterpretState label)
+driver :: Label label => label -> Program label -> String
 driver start prog =
     let flows = flow prog
         labelDict = labelsOf prog
         startTask = (start, initLabel prog)
         proc = process labelDict flows TopLevel [] (startTask : S.toList flows)
-    in  runState (runExceptT proc) (M.singleton (start, TopLevel, []) initEnv)
+        (_, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
+    in  logging
+
+
+showState :: Show l => InterpretState l -> String
+showState = unlines . map (\((l, sc, cstr), env) -> "--------- Env " ++ show l ++ "----------\n" ++
+                                                    "Scope Chain: " ++ show sc ++ "\n" ++
+                                                    "Call String: "  ++ show cstr ++ "\n" ++
+                                                    "Environment: \n" ++ show env ++ "\n"
+                          ) . M.toList
