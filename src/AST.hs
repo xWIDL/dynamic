@@ -26,7 +26,7 @@ data Stmt a = VarDecl a Name (Maybe (Expr a))
             | Skip a
             | ReturnStmt a (Maybe (Expr a))
             | Seq (Stmt a) (Stmt a)
-            deriving (Show, Eq, Functor, Foldable, Traversable)
+            deriving (Eq, Functor, Foldable, Traversable)
 
 data Expr a = PrimLit Prim
             | ObjExpr [(Name, Expr a)]
@@ -35,11 +35,61 @@ data Expr a = PrimLit Prim
             | InfixExpr (Expr a) InfixOp (Expr a)
             | CallExpr (Expr a) [Expr a]
             | Closure a [Name] (Stmt a)
-            deriving (Show, Eq, Functor, Foldable, Traversable)
+            deriving (Eq, Functor, Foldable, Traversable)
 
-data Prim = PrimNum Double | PrimBool Bool | PrimStr String | PrimNull | PrimUndefined deriving (Show, Eq)
+data Prim = PrimNum Double | PrimBool Bool | PrimStr String | PrimNull | PrimUndefined deriving (Eq)
 
-data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Show, Eq)
+data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Eq)
+
+instance Show a => Show (Stmt a) where
+    show (VarDecl a x mExpr) = "var " ++ show x ++ " " ++ show a ++ mRHS
+        where
+            mRHS = case mExpr of
+                Nothing -> ";"
+                Just e  -> " = " ++ show e ++ ";"
+    show (Assign a x expr) = show x ++ " " ++ show a ++ " = " ++ show expr ++ ";"
+    show (If a e s1 s2) = "if (" ++ show e ++ ") " ++ show a ++
+                          " {\n" ++ indent (show s1) ++ "\n} else {\n" ++ indent (show s2) ++ "\n}"
+    show (While a e s) = "while (" ++ show e ++ ") " ++ show a ++ "{\n" ++ indent (show s) ++ "\n}"
+    show (BreakStmt a) = "break " ++ show a ++ ";"
+    show (ContStmt a) = "continue " ++ show a ++ ";"
+    show (Skip a) = "skip " ++ show a ++ ";"
+    show (ReturnStmt a mExpr) = case mExpr of
+        Nothing -> "return " ++ show a ++ ";"
+        Just e  -> "return " ++ show a ++ " " ++ show e ++ ";"
+    show (Seq s1 s2) = show s1 ++ "\n" ++ show s2
+
+instance Show a => Show (Expr a) where
+    show (PrimLit prim) = show prim
+    show (ObjExpr dict) = "{ " ++ sepByComma (map showEntry dict)++ " }"
+        where
+            showEntry (name, expr) = show name ++ " : " ++ show expr
+    show (VarExpr x) = show x
+    show (GetExpr e x) = "(" ++ show e ++ ")." ++ show x
+    show (InfixExpr e1 op e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
+    show (CallExpr e args) = "(" ++ show e ++ ")(" ++ sepByComma (map show args) ++ ")"
+    show (Closure a args body) = "function (" ++ sepByComma (map show args) ++ ") {\n" ++ indent (show body) ++ "}"
+
+instance Show Prim where
+    show (PrimNum d)  = show d
+    show (PrimBool b) = if b then "true" else "false"
+    show (PrimStr s)  = show s
+    show PrimNull     = "null"
+    show PrimUndefined = "undefined"
+
+instance Show InfixOp where
+    show OPlus = "+"
+    show OSubs = "-"
+    show ODiv  = "/"
+    show OMult = "*"
+
+sepByComma :: [String] -> String
+sepByComma [] = ""
+sepByComma [x] = x
+sepByComma (x:xs) = x ++ ", " ++ sepByComma xs
+
+indent :: String -> String
+indent = unlines . map ("\t" ++) . lines
 
 -- Flow implementation
 
