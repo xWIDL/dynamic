@@ -1,4 +1,4 @@
--- Mode: Execution Model
+-- Model: Execution Model
 
 {-# LANGUAGE TemplateHaskell #-}
 module Model where

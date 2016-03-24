@@ -1,7 +1,4 @@
 -- Abstract: Abstract the essentials out of value
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses,
-             AllowAmbiguousTypes, UndecidableInstances,
-             ScopedTypeVariables #-}
 module Core.Abstract where
 
 class Eq a => Lattice a where
