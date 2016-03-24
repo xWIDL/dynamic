@@ -1,16 +1,25 @@
 -- Abstract: Abstract the essentials out of value
-
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses,
+             AllowAmbiguousTypes, UndecidableInstances,
+             ScopedTypeVariables #-}
 module Core.Abstract where
 
 class Eq a => Lattice a where
-    unionAbs :: a -> a -> a
-    topAbs   :: a
+    join :: a -> a -> a
+    meet :: a -> a -> a
+    top  :: a
+    bot  :: a
 
-    unionAbs a b | a == b = a
-                 | a /= b = topAbs
+    -- default implementation for a flat lattice
+    join a b | a == b = a
+             | a /= b = top
+    meet a b | a == b = a
+             | a /= b = bot
 
-class Lattice a => Abstract c a where
-    abstract   :: c -> a
+class Hom a b where
+    hom :: a -> b
 
-class Lattice a => Computable a op where
-    compute :: op -> a -> a -> a
+class Reduce a op where
+    reduce :: op -> a -> a -> a
+
+class (Lattice a, Reduce a op) => Abstract a op where

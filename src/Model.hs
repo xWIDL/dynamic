@@ -87,7 +87,7 @@ unionStore :: Eq a => Store a -> Store a -> Store a
 unionStore    = M.unionWith unionObject
 
 unionValue :: Eq a => Value a -> Value a -> Value a
-unionValue (VPrim p1) (VPrim p2) = VPrim $ unionAbs p1 p2
+unionValue (VPrim p1) (VPrim p2) = VPrim $ join p1 p2
 unionValue v1 v2 = if v1 == v2 then v1 else VTop -- FIXME: Wow, Magic!
 
 unionObject :: Eq a => Object a -> Object a -> Object a

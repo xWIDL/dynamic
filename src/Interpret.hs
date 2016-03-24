@@ -139,7 +139,7 @@ process labelDict flows = process'
 
                 -- Expression interpretation with side-effects
                 -- NOTE: the "l" here is callsite, maybe we should write it more explicitly
-                interpret _ (PrimLit prim) = return $ VPrim (abstract prim)
+                interpret _ (PrimLit prim) = return $ VPrim (hom prim)
                 interpret l (ObjExpr dict) = do
                     obj <- Object . M.fromList <$> mapM (\(name, expr) -> (name,) <$> interpret l expr) dict
                     ref <- updateEnvWith $ return <$> storeObj obj
@@ -154,7 +154,7 @@ process labelDict flows = process'
                     v2 <- interpret l e2
                     case (v1, v2) of
                         (VPrim p1, VPrim p2) ->
-                            return $ VPrim (compute op p1 p2)
+                            return $ VPrim (reduce op p1 p2)
                         _ -> return $ VPrim APrimUndefined
 
                 interpret l (CallExpr e args) =
