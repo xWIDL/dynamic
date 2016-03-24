@@ -55,7 +55,7 @@ process labelDict flows = process'
                     Just e  -> do
                         retVal <- interpret l e
                         env <- get >>= lookupM (l2, chain, cstr)
-                        let partialStore = _store env `reachableFrom` retVal
+                        partialStore <- reachableFrom retVal
                         return $ Just (retVal, partialStore, _refCount env)
                 other -> throwError' $ "can't interpret " ++ show other
             where
@@ -92,6 +92,15 @@ process labelDict flows = process'
 
                 valueOf = lookupEnvWith _bindings
                 loadObj = lookupEnvWith _store
+
+                reachableFrom (VPrim _) = return M.empty
+                reachableFrom (VRef r) = do
+                    o <- loadObj r
+                    case o of
+                        Object dict   -> foldr M.union (M.singleton r o) <$> mapM reachableFrom (M.elems dict)
+                        OClos _ _ _ _ -> return $ M.singleton r o
+                        OTop          -> error "FIXME: Wow, Magic!"
+                reachableFrom VTop     = error "FIXME: Wow, Magic!"
 
                 -- Expression interpretation with side-effects
                 -- NOTE: the "l" here is callsite, maybe we should write it more explicitly
@@ -134,7 +143,7 @@ process labelDict flows = process'
                                                  (Env (_bindings env)
                                                       (store' `unionStore` (_store env))
                                                       (refCount' `unionRef` (_refCount env)))
-                                        return $ val
+                                        return val
                                     Nothing  -> return $ VPrim PrimUndefined
                             other -> throwError' $ show other ++ " is not closure"
                         other -> throwError' $ show other ++ " is not closure"

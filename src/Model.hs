@@ -100,14 +100,3 @@ applyInfixOp (PrimNum x1) op (PrimNum x2) = PrimNum $ case op of
     OMult -> x1 * x2
     ODiv  -> x1 / x2
 applyInfixOp _ _ _ = PrimUndefined
-
-reachableFrom :: M.Map Ref (Object a) -> Value a -> M.Map Ref (Object a)
-reachableFrom _ (VPrim _) = M.empty
-reachableFrom m (VRef r) =
-    case M.lookup r m of
-        Nothing -> M.empty -- FIXME: Is this sound?
-        Just o  -> case o of
-            Object dict   -> foldr M.union M.empty (map (reachableFrom m) (M.elems dict))
-            OClos _ _ _ _ -> M.singleton r o
-            OTop          -> m -- XXX: Wow, Magic!
-reachableFrom m VTop     = m -- XXX: Wow, Magic!

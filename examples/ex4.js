@@ -17,4 +17,7 @@ var f = function () /* @f */ {
 
 // ctx []
 
-var x = f()(); // { a : 1 }
+// Possible fix: Upon returning of a reference, namely "x", the reachability
+// test should cover only only the current store, but also parental stores.
+var x = f()();  // { a : 1 }
+var y = x.a;    // should be 1
