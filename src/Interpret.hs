@@ -16,13 +16,13 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
 
-type InterpretState label = M.Map (label, ScopeChain label, CallString label) (Env label)
+type InterpretState label = M.Map (label, ScopeChain label, CallString label) (Env label APrim)
 type WorkList label = [(label, label)]
 
 type Interpret label = StateT (InterpretState label) (ExceptT String (Writer String))
 
 interpret :: Label a => a -> Stmt a->
-            (Either String (Maybe (Value a, M.Map Ref (Object a), Ref), InterpretState a)
+            (Either String (Maybe (Value a APrim, M.Map Ref (Object a APrim), Ref), InterpretState a)
             , String)
 interpret start prog =
     let flows = flow prog
@@ -34,7 +34,7 @@ interpret start prog =
 
 process :: Label label => M.Map label (Stmt label) -> S.Set (label, label) ->
                           ScopeChain label -> CallString label -> WorkList label ->
-                          Interpret label (Maybe ((Value label), M.Map Ref (Object label), Ref))
+                          Interpret label (Maybe ((Value label APrim), M.Map Ref (Object label APrim), Ref))
 process labelDict flows = process'
     where
         process' _ _ [] = return Nothing
@@ -187,7 +187,7 @@ process labelDict flows = process'
                     ref <- updateEnvWith $ return <$> storeObj (OClos (Enclosed l start chain) cstr args stmt)
                     return $ VRef ref
 
-lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l (Env l)
+lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l (Env l APrim)
 lookupState l chain cstr = do
     s <- get
     case M.lookup (l, chain, cstr) s of

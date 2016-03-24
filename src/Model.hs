@@ -4,7 +4,6 @@
 module Model where
 
 import AST
-import APrim
 import Core.Abstract
 
 import qualified Data.Map as M
@@ -28,69 +27,69 @@ newtype Ref = Ref Int deriving (Show, Eq, Ord)
 incrRef (Ref i) = Ref (i + 1)
 initRef = Ref 0
 
-data Value a = VPrim APrim
-             | VRef Ref
-             | VTop -- FIXME: Can be anything .... which is too coarse
-             deriving (Show, Eq)
+data Value a p = VPrim p
+               | VRef Ref
+               | VTop -- FIXME: Can be anything .... which is too coarse
+               deriving (Show, Eq)
 
-data Object a = Object (M.Map Name (Value a))
-              -- FIXME: Actually, [Function] is also an object ... but we don't model this temporarily
-              | OClos (ScopeChain a) (CallString a) [Name] (Stmt a)
-              | OTop -- FIXME: ...
-              deriving (Show, Eq)
+data Object a p = Object (M.Map Name (Value a p))
+                -- FIXME: Actually, [Function] is also an object ... but we don't model this temporarily
+                | OClos (ScopeChain a) (CallString a) [Name] (Stmt a)
+                | OTop -- FIXME: ...
+                deriving (Show, Eq)
 
 -- Environment
 
-type Bindings a = M.Map Name (Value a)
-type Store    a = M.Map Ref  (Object a)
+type Bindings a p = M.Map Name (Value a p)
+type Store    a p = M.Map Ref  (Object a p)
 
-data Env a = Env {
-    _bindings :: Bindings a,
-    _store    :: Store a,
+data Env a p = Env {
+    _bindings :: Bindings a p,
+    _store    :: Store a p,
     _refCount :: Ref
 } deriving (Eq)
 
-instance Show a => Show (Env a) where
+instance (Show a, Lattice p, Show p) => Show (Env a p) where
     show env = "refCount: " ++ show (_refCount env) ++ "\n" ++
                "bindings:\n" ++ concatMap (\(Name x, v) -> x ++ "\t" ++ show v ++ "\n") (M.toList (_bindings env)) ++
                "store:\n" ++ concatMap (\(Ref i, o) -> show i ++ "\t" ++ show o ++ "\n") (M.toList (_store env))
 
 $(makeLenses ''Env)
 
-initEnv :: Env a
+initEnv :: Env a p
 initEnv = Env M.empty M.empty initRef
 
-bindValue :: Name -> Value a -> Env a -> Env a
+bindValue :: Name -> Value a p -> Env a p -> Env a p
 bindValue x v = bindings %~ M.insert x v
 
-storeObj :: Object a -> Env a -> (Env a, Ref)
+storeObj :: Object a p -> Env a p -> (Env a p, Ref)
 storeObj o env =
     let ref = _refCount env
     in  (env { _store    = M.insert ref o (_store env),
                _refCount = incrRef ref }, ref)
 
-updateObj :: Ref -> Object a -> Env a -> Env a
+updateObj :: Ref -> Object a p -> Env a p -> Env a p
 updateObj r o env = env { _store = M.insert r o (_store env) }
 
 
 -- Lattice Model
 -- FIXME: Implement the Lattice type-class
 
-unionEnv :: Eq a => Env a -> Env a -> Env a
+unionEnv :: (Eq a, Lattice p) => Env a p -> Env a p -> Env a p
 unionEnv (Env b1 s1 rc1) (Env b2 s2 rc2) =
     Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2)
 
-unionBindings :: Eq a => Bindings a -> Bindings a -> Bindings a
+unionBindings :: (Eq a, Lattice p) => Bindings a p -> Bindings a p -> Bindings a p
 unionBindings = M.unionWith unionValue
 
-unionStore :: Eq a => Store a -> Store a -> Store a
-unionStore    = M.unionWith unionObject
+unionStore :: (Eq a, Eq p) => Store a p -> Store a p -> Store a p
+unionStore = M.unionWith unionObject
 
-unionValue :: Eq a => Value a -> Value a -> Value a
+unionValue :: (Eq a, Lattice p) => Value a p -> Value a p -> Value a p
 unionValue (VPrim p1) (VPrim p2) = VPrim $ join p1 p2
 unionValue v1 v2 = if v1 == v2 then v1 else VTop -- FIXME: Wow, Magic!
 
-unionObject :: Eq a => Object a -> Object a -> Object a
+unionObject :: (Eq a, Eq p) => Object a p -> Object a p -> Object a p
 unionObject o1 o2 = if o1 == o2 then o1 else OTop -- FIXME: Wow, So Magic!
 
 unionRef :: Ref -> Ref -> Ref
