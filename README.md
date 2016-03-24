@@ -14,3 +14,9 @@ subset of JavaScript language.
 + [x] Dynamic accessing
 + [x] Imperative control
 + [x] Object
+
+## TODOs
+- [ ] Componentize the code base
+- [ ] Refine the `APrim` lattice
+- [ ] Path sensitivity
+- [ ] Introduce exception flows

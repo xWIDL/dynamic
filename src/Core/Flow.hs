@@ -1,6 +1,6 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
+-- Flow: Data Flow among labelled blocks
 
-module Flow where
+module Core.Flow where
 
 import Data.Set (Set)
 

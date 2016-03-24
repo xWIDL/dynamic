@@ -1,11 +1,10 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses,
-             FlexibleContexts, TupleSections,
-             DeriveTraversable, DeriveFunctor,
-             DeriveFoldable #-}
+-- AST: A subset of JavaScript
+
+{-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable #-}
 
 module AST where
 
-import Flow
+import Core.Flow
 import Data.Set hiding (foldr, map)
 import qualified Data.Set as S
 import qualified Data.Map as M

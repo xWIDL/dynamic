@@ -18,12 +18,18 @@ cabal-version:       >=1.10
 executable dynamic
   main-is:             Main.hs
   other-modules:       AST
-                       Flow
+                       Core.Flow
                        Interpret
                        Model
                        Parser
+                       Common
+                       Core.Abstract
+                       APrim
   -- other-modules:
-  -- other-extensions:
+  default-extensions:  FlexibleInstances
+                       MultiParamTypeClasses
+                       FlexibleContexts
+
   build-depends:       base >=4.8 && <4.9, containers, lens, mtl,
                        language-ecmascript
   hs-source-dirs:      src

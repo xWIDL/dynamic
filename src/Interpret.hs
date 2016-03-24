@@ -1,9 +1,15 @@
-{-# LANGUAGE FlexibleContexts, TupleSections, LambdaCase #-}
+-- Interpret: Abstract Intepretation Engine
+
+{-# LANGUAGE TupleSections, LambdaCase #-}
 module Interpret where
 
 import AST
-import Flow
+import Core.Flow
 import Model
+import Common
+import APrim
+import Core.Abstract
+
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Monad.State
@@ -181,19 +187,12 @@ process labelDict flows = process'
                     ref <- updateEnvWith $ return <$> storeObj (OClos (Enclosed l start chain) cstr args stmt)
                     return $ VRef ref
 
-
-
 lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l (Env l)
 lookupState l chain cstr = do
     s <- get
     case M.lookup (l, chain, cstr) s of
         Nothing -> return initEnv
         Just e  -> return e
-
-lookupM :: (MonadError String m, Show k, Ord k) => k -> M.Map k v -> m v
-lookupM k m = case M.lookup k m of
-    Just v  -> return v
-    Nothing -> throwError $ "Can't find " ++ show k
 
 showState :: Show l => InterpretState l -> String
 showState = unlines . map (\((l, sc, cstr), env) -> "--------- Env " ++ show l ++ "----------\n" ++

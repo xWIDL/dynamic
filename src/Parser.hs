@@ -1,10 +1,12 @@
+-- Parser: Parse a JavaScript subset by partial translation
+
 {-# LANGUAGE LambdaCase #-}
 module Parser where
 
 import Language.ECMAScript3.Syntax.Annotations
 import qualified Language.ECMAScript3 as ES
 
-import Flow
+import Core.Flow
 import AST
 
 newtype L = L { unL :: Int } deriving (Eq, Ord)
