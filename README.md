@@ -16,7 +16,13 @@ subset of JavaScript language.
 + [x] Object
 
 ## TODOs
-- [ ] Componentize the code base
-- [ ] Refine the `APrim` lattice
 - [ ] Path sensitivity
 - [ ] Introduce exception flows
+
+## Problems
+1. TAJS used a *very large* lattice and it seems reasonable to me now, since we
+   should define operation between *any types*, such as `"s" + 1`. Basically,
+   it is a mapping from operator and two input types to output type. The
+   intra-type definitions should be able to be merged into the more general
+   framework, facilitating the maintainability. Also, it seems like that
+   some *coercion* mechanism is used.
