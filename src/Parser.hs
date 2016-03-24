@@ -59,11 +59,17 @@ translateStmt (ES.FunctionStmt a f args ss) = do
 translateStmt other = Left $ "Can't translate " ++ show other
 
 translateExprStmt :: Show a => a -> ES.Expression a -> Either String (Stmt a)
-translateExprStmt l (ES.AssignExpr _ ES.OpAssign (ES.LVar _ x) e) = do
+translateExprStmt l (ES.AssignExpr _ ES.OpAssign lval e) = do
     e' <- translateExpr e
-    return $ Assign l (Name x) e'
-
+    lval' <- translateLVal lval
+    return $ Assign l lval' e'
 translateExprStmt _ other = Left $ "Can't translate " ++ show other
+
+translateLVal :: Show a => ES.LValue a -> Either String (LVal a)
+translateLVal (ES.LVar _ s) = return $ LVar (Name s)
+translateLVal (ES.LDot _ e s) = do
+    e' <- translateExpr e
+    return $ LProp e' (Name s)
 
 translateExpr :: Show a => ES.Expression a -> Either String (Expr a)
 translateExpr = \case

@@ -91,6 +91,9 @@ storeObj o env =
     in  (env { _store    = M.insert ref o (_store env),
                _refCount = incrRef ref }, ref)
 
+updateObj :: Ref -> Object a -> Env a -> Env a
+updateObj r o env = env { _store = M.insert r o (_store env) }
+
 -- XXX: Think about an "abstract" one
 -- XXX: Consider more coersions
 applyInfixOp :: Prim -> InfixOp -> Prim -> Prim

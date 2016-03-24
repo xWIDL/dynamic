@@ -49,7 +49,21 @@ process labelDict flows = process'
                             Nothing -> return $ VPrim PrimNull
                             Just e  -> interpret l e
                     updateEnvWith_ (bindValue x val) >> cont oldState
-                Assign l x expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState
+                Assign l (LVar x) expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState
+                Assign l (LProp e a) expr -> do
+                    exprVal <- interpret l expr
+                    v <- interpret l e
+                    case v of
+                        VPrim _ -> error "Can't set property of primitive"
+                        VRef r  -> do
+                            o <- loadObj r
+                            case o of
+                                Object dict   -> do
+                                    updateEnvWith_ $ updateObj r (Object (M.insert a exprVal dict))
+                                    cont oldState
+                                OClos _ _ _ _ -> error "Can't set property of closure"
+                                OTop          -> throwError' "Can't set property of OTop"
+                        VTop    -> error "Wow, Magic"
                 ReturnStmt l mExpr -> case mExpr of
                     Nothing -> return Nothing
                     Just e  -> do
@@ -57,6 +71,7 @@ process labelDict flows = process'
                         env <- get >>= lookupM (l2, chain, cstr)
                         partialStore <- reachableFrom retVal
                         return $ Just (retVal, partialStore, _refCount env)
+
                 other -> throwError' $ "can't interpret " ++ show other
             where
                 throwError' x = throwError ("[Error : " ++ show l2 ++ ", rest: " ++ show wl' ++ "] " ++ x)

@@ -13,4 +13,4 @@ subset of JavaScript language.
 + [x] Closure
 + [ ] Dynamic accessing
 + [ ] Imperative control
-+ [ ] Object
++ [x] Object

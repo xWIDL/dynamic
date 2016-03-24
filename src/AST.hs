@@ -18,7 +18,7 @@ instance Show Name where
     show (Name x) = x
 
 data Stmt a = VarDecl a Name (Maybe (Expr a))
-            | Assign a Name (Expr a)
+            | Assign a (LVal a) (Expr a)
             | If a (Expr a) (Stmt a) (Stmt a)
             | While a (Expr a) (Stmt a)
             | BreakStmt a
@@ -40,6 +40,12 @@ data Expr a = PrimLit Prim
 data Prim = PrimNum Double | PrimBool Bool | PrimStr String | PrimNull | PrimUndefined deriving (Eq)
 
 data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Eq)
+
+data LVal a = LVar Name | LProp (Expr a) Name deriving (Eq, Functor, Foldable, Traversable)
+
+instance Show a => Show (LVal a) where
+    show (LVar x) = show x
+    show (LProp x a) = show x ++ "." ++ show a
 
 instance Show a => Show (Stmt a) where
     show (VarDecl a x mExpr) = "var " ++ show x ++ " " ++ show a ++ mRHS
