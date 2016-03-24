@@ -62,6 +62,15 @@ translateStmt (ES.FunctionStmt a f args ss) = do
 translateStmt (ES.BreakStmt l Nothing) = return (BreakStmt l)
 translateStmt (ES.ContinueStmt l Nothing) = return (ContStmt l)
 
+translateStmt (ES.TryStmt l s Nothing Nothing) = do
+    s' <- translateStmt s
+    return $ TryStmt l s' Nothing
+
+translateStmt (ES.TryStmt l s (Just (ES.CatchClause lc i sc)) Nothing) = do
+    s'  <- translateStmt s
+    sc' <- translateStmt sc
+    return (TryStmt l s' (Just (lc, idToName i, sc')))
+
 translateStmt other = Left $ "Can't translate " ++ show other
 
 translateExprStmt :: Show a => a -> ES.Expression a -> Either String (Stmt a)

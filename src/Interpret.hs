@@ -80,7 +80,8 @@ process labelDict flows = process'
                         partialStore <- reachableFrom retVal
                         return $ Just (retVal, partialStore, _refCount env)
 
-                -- Imperative Control
+                -- Imperative Control with Path Sensitivity
+
                 If l e s1 s2 -> do
                     val <- interpret l e
                     case val of
@@ -188,7 +189,7 @@ process labelDict flows = process'
                                 let newLabelDict = labelsOf stmt
                                 env <- get >>= lookupM (l1, chain, cstr)
                                 modify $ M.insert (start, boundChain, l : boundCStr)
-                                                  (Env bindings' (_store env) (_refCount env))
+                                                  (Env bindings' (_store env) (_refCount env) (_catcher env))
                                                   -- FIXME: Should we just use `env` here?
                                 mVal <- process newLabelDict newFlows boundChain (l : boundCStr) ((start, initLabel stmt) : S.toList newFlows)
                                 case mVal of
@@ -196,7 +197,8 @@ process labelDict flows = process'
                                         modify $ M.insert (l2, chain, cstr)
                                                  (Env (_bindings env)
                                                       (store' `unionStore` (_store env))
-                                                      (refCount' `unionRef` (_refCount env)))
+                                                      (refCount' `unionRef` (_refCount env))
+                                                      (_catcher env))
                                         return val
                                     Nothing  -> return $ VPrim (hom PrimUndefined)
                             other -> throwError' $ show other ++ " is not closure"

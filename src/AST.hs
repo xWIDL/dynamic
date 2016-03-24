@@ -25,6 +25,8 @@ data Stmt a = VarDecl a Name (Maybe (Expr a))
             | Skip a
             | ReturnStmt a (Maybe (Expr a))
             | Seq (Stmt a) (Stmt a)
+            | TryStmt a (Stmt a) (Maybe (a, Name, Stmt a))
+            | ThrowStmt a (Expr a)
             deriving (Eq, Functor, Foldable, Traversable)
 
 data Expr a = PrimLit Prim
@@ -63,6 +65,12 @@ instance Show a => Show (Stmt a) where
         Nothing -> "return " ++ show a ++ ";"
         Just e  -> "return " ++ show a ++ " " ++ show e ++ ";"
     show (Seq s1 s2) = show s1 ++ "\n" ++ show s2
+    show (TryStmt l s Nothing) = "try " ++ show l ++ " {\n" ++ indent (show s) ++ "}"
+    show (TryStmt l s (Just (lc, e, sc))) =
+        "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} catch " ++
+        show lc ++ " (" ++ show e ++ ") {\n" ++ indent (show sc) ++ "}"
+    show (ThrowStmt l e) = "throw " ++ show l ++ " " ++ show e ++ ";"
+
 
 instance Show a => Show (Expr a) where
     show (PrimLit prim) = show prim
@@ -108,6 +116,8 @@ instance Label a => Flow Stmt a where
     initLabel (Skip l)              = l
     initLabel (ReturnStmt l _)      = l
     initLabel (Seq s _)             = initLabel s
+    initLabel (TryStmt l _ _)       = l
+    initLabel (ThrowStmt l _)       = l
 
     finalLabels (VarDecl l _ _)     = singleton l
     finalLabels (Assign l _ _)      = singleton l
@@ -118,6 +128,9 @@ instance Label a => Flow Stmt a where
     finalLabels (Skip l)            = singleton l
     finalLabels (ReturnStmt l _)    = singleton l
     finalLabels (Seq s1 s2)         = finalLabels s2
+    finalLabels (TryStmt _ s Nothing) = finalLabels s
+    finalLabels (TryStmt _ s (Just (_, _, sc))) = finalLabels s `union` finalLabels sc
+    finalLabels (ThrowStmt l _)     = singleton l
 
     flow (If l _ s1 s2) = fromList [(l, initLabel s1), (l, initLabel s2)] `union`
                           flow s1 `union` flow s2
@@ -125,6 +138,10 @@ instance Label a => Flow Stmt a where
                           S.fromList (scanCont s (\l' -> (l', l))) `union`
                           flow s
     flow (Seq s1 s2)    = flow s1 `union` S.map (,initLabel s2) (finalLabels s1) `union` flow s2
+    flow (TryStmt l s Nothing) = flow s `union` S.singleton (l, initLabel s)
+    flow (TryStmt l s (Just (lc, e, sc))) =
+        flow s `union` S.singleton (l, initLabel s) `union`
+        flow sc `union` S.singleton (lc, initLabel sc)
     flow _              = empty
 
 scanCont :: Stmt a -> (a -> b) -> [b]

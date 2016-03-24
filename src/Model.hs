@@ -46,8 +46,8 @@ type Store    a p = M.Map Ref  (Object a p)
 data Env a p = Env {
     _bindings :: Bindings a p,
     _store    :: Store a p,
-    _refCount :: Ref
-    -- _catcher  :: Maybe a
+    _refCount :: Ref,
+    _catcher  :: Maybe a
 } deriving (Eq)
 
 instance (Show a, Lattice p, Show p) => Show (Env a p) where
@@ -58,7 +58,7 @@ instance (Show a, Lattice p, Show p) => Show (Env a p) where
 $(makeLenses ''Env)
 
 initEnv :: Env a p
-initEnv = Env M.empty M.empty initRef
+initEnv = Env M.empty M.empty initRef Nothing
 
 bindValue :: Name -> Value a p -> Env a p -> Env a p
 bindValue x v = bindings %~ M.insert x v
@@ -77,8 +77,8 @@ updateObj r o env = env { _store = M.insert r o (_store env) }
 -- FIXME: Implement the Lattice type-class
 
 unionEnv :: (Eq a, Lattice p) => Env a p -> Env a p -> Env a p
-unionEnv (Env b1 s1 rc1) (Env b2 s2 rc2) =
-    Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2)
+unionEnv (Env b1 s1 rc1 c) (Env b2 s2 rc2 Nothing) =
+    Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2) c
 
 unionBindings :: (Eq a, Lattice p) => Bindings a p -> Bindings a p -> Bindings a p
 unionBindings = M.unionWith unionValue
