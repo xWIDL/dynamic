@@ -55,7 +55,7 @@ instance Show a => Show (Stmt a) where
                 Just e  -> " = " ++ show e ++ ";"
     show (Assign a x expr) = show x ++ " " ++ show a ++ " = " ++ show expr ++ ";"
     show (If a e s1 s2) = "if (" ++ show e ++ ") " ++ show a ++
-                          " {\n" ++ indent (show s1) ++ "\n} else {\n" ++ indent (show s2) ++ "\n}"
+                          " {\n" ++ indent (show s1) ++ "} else {\n" ++ indent (show s2) ++ "}a"
     show (While a e s) = "while (" ++ show e ++ ") " ++ show a ++ "{\n" ++ indent (show s) ++ "\n}"
     show (BreakStmt a) = "break " ++ show a ++ ";"
     show (ContStmt a) = "continue " ++ show a ++ ";"

@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, FlexibleInstances, MultiParamTypeClasses,
+             FlexibleContexts, LambdaCase #-}
 module Model where
 
 import AST
@@ -24,9 +25,74 @@ newtype Ref = Ref Int deriving (Show, Eq, Ord)
 incrRef (Ref i) = Ref (i + 1)
 initRef = Ref 0
 
+class Eq a => Lattice a where
+    unionAbs :: a -> a -> a
+    topAbs   :: a
+
+    unionAbs a b | a == b = a
+                 | a /= b = topAbs
+
+
+class Lattice a => Abstract c a where
+    abstract   :: c -> a
+
+class Lattice a => Computable a op where
+    compute :: op -> a -> a -> a
+
+data APrim = APrimNum ANum | APrimBool ABool | APrimStr AString | APrimNull | APrimUndefined deriving (Show, Eq)
+
+data ANum = NegNum | ZeroNum | PosNum | TopNum deriving (Show, Eq)
+data ABool = FalseBool | TrueBool | TopBool deriving (Show, Eq)
+data AString = EmptyString | NonEmptyString | TopString deriving (Show, Eq)
+
+instance Lattice ANum where
+    topAbs = TopNum
+
+instance Abstract Double ANum where
+    abstract x | x >  0 = PosNum
+               | x <  0 = NegNum
+               | x == 0 = ZeroNum
+
+instance Computable ANum InfixOp where
+    compute _ _ _ = TopNum -- FIXME: boilerplate code
+
+instance Lattice ABool where
+    topAbs = TopBool
+
+instance Abstract Bool ABool where
+    abstract True = TrueBool
+    abstract False = FalseBool
+
+instance Computable ABool InfixOp where
+    compute _ _ _ = TopBool -- FIXME: boilerplate code
+
+instance Lattice AString where
+    topAbs = TopString
+
+instance Abstract String AString where
+    abstract "" = EmptyString
+    abstract _  = NonEmptyString
+
+instance Computable AString InfixOp where
+    compute _ _ _ = TopString -- FIXME: boilerplate code
+
+instance Lattice APrim where
+    topAbs = APrimUndefined
+
+instance Abstract Prim APrim where
+    abstract (PrimNum n)   = APrimNum  $ abstract n
+    abstract (PrimStr n)   = APrimStr  $ abstract n
+    abstract (PrimBool n)  = APrimBool $ abstract n
+    abstract PrimNull      = APrimNull
+    abstract PrimUndefined = APrimUndefined
+
+instance Computable APrim InfixOp where
+    compute _ _ _ = APrimUndefined -- FIXME: boilerplate code
+
+
 -- NOTE: Currently, it is not very abstract. So basically,
 --       we are building an interpreter now
-data Value a = VPrim Prim
+data Value a = VPrim APrim
              | VRef Ref
              | VTop -- FIXME: Can be anything .... which is too coarse
              deriving (Show, Eq)
@@ -70,10 +136,7 @@ unionStore :: Eq a => Store a -> Store a -> Store a
 unionStore    = M.unionWith unionObject
 
 unionValue :: Eq a => Value a -> Value a -> Value a
-unionValue (VPrim PrimUndefined) v = v
-unionValue (VPrim PrimNull) v = v
-unionValue v (VPrim PrimUndefined) = v
-unionValue v (VPrim PrimNull) = v
+unionValue (VPrim p1) (VPrim p2) = VPrim $ unionAbs p1 p2
 unionValue v1 v2 = if v1 == v2 then v1 else VTop -- FIXME: Wow, Magic!
 
 unionObject :: Eq a => Object a -> Object a -> Object a
@@ -93,13 +156,3 @@ storeObj o env =
 
 updateObj :: Ref -> Object a -> Env a -> Env a
 updateObj r o env = env { _store = M.insert r o (_store env) }
-
--- XXX: Think about an "abstract" one
--- XXX: Consider more coersions
-applyInfixOp :: Prim -> InfixOp -> Prim -> Prim
-applyInfixOp (PrimNum x1) op (PrimNum x2) = PrimNum $ case op of
-    OPlus -> x1 + x2
-    OSubs -> x1 - x2
-    OMult -> x1 * x2
-    ODiv  -> x1 / x2
-applyInfixOp _ _ _ = PrimUndefined

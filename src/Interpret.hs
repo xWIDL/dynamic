@@ -46,7 +46,7 @@ process labelDict flows = process'
             case stmt of
                 VarDecl l x mExpr -> do
                     val <- case mExpr of
-                            Nothing -> return $ VPrim PrimNull
+                            Nothing -> return $ VPrim APrimNull
                             Just e  -> interpret l e
                     updateEnvWith_ (bindValue x val) >> cont oldState
                 Assign l (LVar x) expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState
@@ -71,6 +71,20 @@ process labelDict flows = process'
                         env <- get >>= lookupM (l2, chain, cstr)
                         partialStore <- reachableFrom retVal
                         return $ Just (retVal, partialStore, _refCount env)
+
+                -- Imperative Control
+                If l e s1 s2 -> do
+                    _ <- interpret l e -- FIXME: Here, we don't have any path sensitivity .... it might not be precise
+                                       --        The only reason for interpretation is to introduce potential side-effects
+                    cont oldState
+
+                Skip _ -> cont oldState
+
+                While l e _ -> do
+                    _ <- interpret l e
+                    cont oldState -- XXX: How to prove that, it *will* halt?
+                BreakStmt _ -> cont oldState
+                ContStmt a -> cont oldState
 
                 other -> throwError' $ "can't interpret " ++ show other
             where
@@ -119,7 +133,7 @@ process labelDict flows = process'
 
                 -- Expression interpretation with side-effects
                 -- NOTE: the "l" here is callsite, maybe we should write it more explicitly
-                interpret _ (PrimLit prim) = return $ VPrim prim
+                interpret _ (PrimLit prim) = return $ VPrim (abstract prim)
                 interpret l (ObjExpr dict) = do
                     obj <- Object . M.fromList <$> mapM (\(name, expr) -> (name,) <$> interpret l expr) dict
                     ref <- updateEnvWith $ return <$> storeObj obj
@@ -134,8 +148,8 @@ process labelDict flows = process'
                     v2 <- interpret l e2
                     case (v1, v2) of
                         (VPrim p1, VPrim p2) ->
-                            return $ VPrim (applyInfixOp p1 op p2)
-                        _ -> return $ VPrim PrimUndefined
+                            return $ VPrim (compute op p1 p2)
+                        _ -> return $ VPrim APrimUndefined
 
                 interpret l (CallExpr e args) =
                     interpret l e >>= \case
@@ -159,7 +173,7 @@ process labelDict flows = process'
                                                       (store' `unionStore` (_store env))
                                                       (refCount' `unionRef` (_refCount env)))
                                         return val
-                                    Nothing  -> return $ VPrim PrimUndefined
+                                    Nothing  -> return $ VPrim APrimUndefined
                             other -> throwError' $ show other ++ " is not closure"
                         other -> throwError' $ show other ++ " is not closure"
 

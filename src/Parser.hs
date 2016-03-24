@@ -29,6 +29,7 @@ translateStmts :: Show a => [ES.Statement a] -> Either String (Stmt a)
 translateStmts stmts = foldr1 Seq <$> mapM translateStmt stmts
 
 translateStmt :: Show a => ES.Statement a -> Either String (Stmt a)
+translateStmt (ES.BlockStmt a stmts) = translateStmts stmts
 translateStmt (ES.ExprStmt a e) = translateExprStmt a e
 
 translateStmt (ES.IfStmt a e1 s1 s2) = do
