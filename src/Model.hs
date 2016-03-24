@@ -47,6 +47,7 @@ data Env a p = Env {
     _bindings :: Bindings a p,
     _store    :: Store a p,
     _refCount :: Ref
+    -- _catcher  :: Maybe a
 } deriving (Eq)
 
 instance (Show a, Lattice p, Show p) => Show (Env a p) where

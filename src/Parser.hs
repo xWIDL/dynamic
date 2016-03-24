@@ -59,6 +59,9 @@ translateStmt (ES.FunctionStmt a f args ss) = do
     let closure = Closure a (map idToName args) s'
     return (VarDecl a (idToName f) (Just closure))
 
+translateStmt (ES.BreakStmt l Nothing) = return (BreakStmt l)
+translateStmt (ES.ContinueStmt l Nothing) = return (ContStmt l)
+
 translateStmt other = Left $ "Can't translate " ++ show other
 
 translateExprStmt :: Show a => a -> ES.Expression a -> Either String (Stmt a)

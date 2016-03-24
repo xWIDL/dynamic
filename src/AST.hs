@@ -54,8 +54,8 @@ instance Show a => Show (Stmt a) where
                 Just e  -> " = " ++ show e ++ ";"
     show (Assign a x expr) = show x ++ " " ++ show a ++ " = " ++ show expr ++ ";"
     show (If a e s1 s2) = "if (" ++ show e ++ ") " ++ show a ++
-                          " {\n" ++ indent (show s1) ++ "} else {\n" ++ indent (show s2) ++ "}a"
-    show (While a e s) = "while (" ++ show e ++ ") " ++ show a ++ "{\n" ++ indent (show s) ++ "\n}"
+                          " {\n" ++ indent (show s1) ++ "} else {\n" ++ indent (show s2) ++ "}"
+    show (While a e s) = "while (" ++ show e ++ ") " ++ show a ++ "{\n" ++ indent (show s) ++ "}"
     show (BreakStmt a) = "break " ++ show a ++ ";"
     show (ContStmt a) = "continue " ++ show a ++ ";"
     show (Skip a) = "skip " ++ show a ++ ";"
@@ -94,7 +94,7 @@ sepByComma [x] = x
 sepByComma (x:xs) = x ++ ", " ++ sepByComma xs
 
 indent :: String -> String
-indent = unlines . map ("\t" ++) . lines
+indent = unlines . map ("  " ++) . lines
 
 -- Flow implementation
 
@@ -112,7 +112,7 @@ instance Label a => Flow Stmt a where
     finalLabels (VarDecl l _ _)     = singleton l
     finalLabels (Assign l _ _)      = singleton l
     finalLabels (If _ _ s1 s2)      = finalLabels s1 `union` finalLabels s2
-    finalLabels (While l _ _)       = singleton l
+    finalLabels (While l _ s)       = singleton l `union` S.fromList (scanBreak s id)
     finalLabels (BreakStmt l)       = singleton l
     finalLabels (ContStmt l)        = singleton l
     finalLabels (Skip l)            = singleton l
@@ -121,9 +121,23 @@ instance Label a => Flow Stmt a where
 
     flow (If l _ s1 s2) = fromList [(l, initLabel s1), (l, initLabel s2)] `union`
                           flow s1 `union` flow s2
-    flow (While l _ s)  = singleton (l, initLabel s) `union` (S.map (,l) (finalLabels s))
+    flow (While l _ s)  = singleton (l, initLabel s) `union`
+                          S.fromList (scanCont s (\l' -> (l', l))) `union`
+                          flow s
     flow (Seq s1 s2)    = flow s1 `union` S.map (,initLabel s2) (finalLabels s1) `union` flow s2
     flow _              = empty
+
+scanCont :: Stmt a -> (a -> b) -> [b]
+scanCont (ContStmt l) f = [f l]
+scanCont (Seq s1 s2) f = scanCont s1 f ++ scanCont s2 f
+scanCont (If _ _ s1 s2) f = scanCont s1 f ++ scanCont s2 f
+scanCont _ _ = []
+
+scanBreak :: Stmt a -> (a -> b) -> [b]
+scanBreak (BreakStmt l) f = [f l]
+scanBreak (Seq s1 s2) f = scanBreak s1 f ++ scanBreak s2 f
+scanBreak (If _ _ s1 s2) f = scanBreak s1 f ++ scanBreak s2 f
+scanBreak _ _ = []
 
 labelsOf :: Label a => Stmt a -> M.Map a (Stmt a)
 labelsOf s = case s of
