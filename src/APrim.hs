@@ -90,6 +90,12 @@ instance Hom ABool AString where
     hom BotBool = BotString
     hom _       = NonEmptyString
 
+instance Hom AString ABool where
+    hom EmptyString     = FalseBool
+    hom NonEmptyString  = TrueBool
+    hom BotString       = BotBool
+    hom TopString       = TopBool
+
 instance Hom ANum ABool where
     hom NegNum  = TrueBool
     hom PosNum  = TrueBool
@@ -106,7 +112,29 @@ instance Hom ABool ANum where
 -- Abstract Primitive
 
 instance Lattice APrim where
-    top = APrimUndefined
+    -- NOTE: Make "flat" lattice non-flat by explicit coercion
+    --       The observation is that, it is not really flat, because
+    --       1 meet true is true (XXX: it is met to Bool, but is this decision valid?)
+    meet (APrimNum n) (APrimBool b) =
+        let b' = hom n `meet` b
+        in  if b' == bot then bot else APrimBool b'
+
+    meet (APrimBool b) (APrimNum n) =
+        let b' = b `meet` hom n
+        in  if b' == bot then bot else APrimBool b'
+
+    meet (APrimStr n) (APrimBool b) =
+        let b' = hom n `meet` b
+        in  if b' == bot then bot else APrimBool b'
+
+    meet (APrimBool b) (APrimStr n) =
+        let b' = b `meet` hom n
+        in  if b' == bot then bot else APrimBool b'
+
+    meet p1 p2 | p1 == p2 = p1
+               | p1 /= p2 = bot
+
+    top = APrimUndefined -- XXX: This is an immature decision
     bot = APrimBot
 
 instance Hom Prim APrim where
@@ -116,7 +144,6 @@ instance Hom Prim APrim where
     hom PrimNull      = APrimNull
     hom PrimUndefined = APrimUndefined
 
--- FIXME: Coercion or a more general and compostional framework
 instance Reduce APrim InfixOp where
     -- Homogenous Reduction
     reduce op (APrimNum n1)  (APrimNum n2)  = APrimNum  $ reduce op n1 n2

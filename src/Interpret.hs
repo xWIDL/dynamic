@@ -29,7 +29,7 @@ interpret start prog =
     let flows = flow prog
         labelDict = labelsOf prog
         startTask = (start, initLabel prog)
-        proc = process labelDict flows TopLevel [] (startTask : S.toList flows)
+        proc = process labelDict flows TopLevel [] ([startTask]) -- : S.toList flows)
         (ret, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
     in  runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
 
@@ -56,8 +56,8 @@ process labelDict flows = process'
                     val <- case mExpr of
                             Nothing -> return $ VPrim (hom PrimNull)
                             Just e  -> interpret l e
-                    updateEnvWith_ (bindValue x val) >> cont oldState
-                Assign l (LVar x) expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState
+                    updateEnvWith_ (bindValue x val) >> cont oldState Nothing
+                Assign l (LVar x) expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState Nothing
                 Assign l (LProp e a) expr -> do
                     exprVal <- interpret l expr
                     v <- interpret l e
@@ -68,7 +68,7 @@ process labelDict flows = process'
                             case o of
                                 Object dict   -> do
                                     updateEnvWith_ $ updateObj r (Object (M.insert a exprVal dict))
-                                    cont oldState
+                                    cont oldState Nothing
                                 OClos _ _ _ _ -> error "Can't set property of closure"
                                 OTop          -> throwError' "Can't set property of OTop"
                         VTop    -> error "Wow, Magic"
@@ -82,30 +82,47 @@ process labelDict flows = process'
 
                 -- Imperative Control
                 If l e s1 s2 -> do
-                    _ <- interpret l e -- FIXME: Here, we don't have any path sensitivity .... it might not be precise
-                                       --        The only reason for interpretation is to introduce potential side-effects
-                    cont oldState
+                    val <- interpret l e
+                    case val of
+                        VPrim prim -> do
+                            let aTrue   = hom (PrimBool True)
+                            let aFalse  = hom (PrimBool False)
+                            let asTrue  = prim `meet` aTrue
+                            let asFalse = prim `meet` aFalse
+                            if asTrue == bot
+                                then if asFalse == bot
+                                    then error $ "How can something " ++ show prim ++
+                                            " be neither True or False?"
+                                    else cont oldState (Just [(l, initLabel s2)])
+                                else if asFalse == bot
+                                    then cont oldState (Just [(l, initLabel s1)])
+                                    else cont oldState Nothing
 
-                Skip _ -> cont oldState
+                        _ -> cont oldState Nothing
+
+                Skip _ -> cont oldState Nothing
 
                 While l e _ -> do
                     _ <- interpret l e
-                    cont oldState -- XXX: How to prove that, it *will* halt?
-                BreakStmt _ -> cont oldState
-                ContStmt a -> cont oldState
+                    cont oldState Nothing -- XXX: How to prove that, it *will* halt?
+                BreakStmt _ -> cont oldState Nothing
+                ContStmt a -> cont oldState Nothing
 
                 other -> throwError' $ "can't interpret " ++ show other
             where
                 throwError' x = throwError ("[Error : " ++ show l2 ++ ", rest: " ++ show wl' ++ "] " ++ x)
 
                 -- Continue without unwinding the stack
-                cont oldState = do
+                cont oldState mSucc = do
                     newState <- get
                     if oldState == newState
                         then process' chain cstr wl'
-                        else do
-                            let wl'' = filter (\(u, v) -> u == l2) $ S.toList flows
-                            process' chain cstr (wl' ++ wl'')
+                        else case mSucc of
+                            Nothing -> do
+                                let wl'' = filter (\(u, v) -> u == l2) $ S.toList flows
+                                process' chain cstr (wl' ++ wl'')
+                            -- Path sensitivity
+                            Just succs -> process' chain cstr (wl' ++ succs)
 
                 -- Local Environment Update
                 updateEnvWith f = do
