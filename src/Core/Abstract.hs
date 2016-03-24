@@ -21,5 +21,3 @@ class Hom a b where
 
 class Reduce a op where
     reduce :: op -> a -> a -> a
-
-class (Lattice a, Reduce a op) => Abstract a op where

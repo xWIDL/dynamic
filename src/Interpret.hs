@@ -7,7 +7,6 @@ import AST
 import Core.Flow
 import Model
 import Common
-import APrim
 import Core.Abstract
 
 import qualified Data.Map as M
@@ -16,13 +15,15 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
 
-type InterpretState label = M.Map (label, ScopeChain label, CallString label) (Env label APrim)
+class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p) => Abstract p where
+
+type InterpretState label p = M.Map (label, ScopeChain label, CallString label) (Env label p)
 type WorkList label = [(label, label)]
 
-type Interpret label = StateT (InterpretState label) (ExceptT String (Writer String))
+type Interpret label p = StateT (InterpretState label p) (ExceptT String (Writer String))
 
-interpret :: Label a => a -> Stmt a->
-            (Either String (Maybe (Value a APrim, M.Map Ref (Object a APrim), Ref), InterpretState a)
+interpret :: (Label a, Abstract p) => a -> Stmt a->
+            (Either String (Maybe (Value a p, M.Map Ref (Object a p), Ref), InterpretState a p)
             , String)
 interpret start prog =
     let flows = flow prog
@@ -32,9 +33,10 @@ interpret start prog =
         (ret, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
     in  runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
 
-process :: Label label => M.Map label (Stmt label) -> S.Set (label, label) ->
-                          ScopeChain label -> CallString label -> WorkList label ->
-                          Interpret label (Maybe ((Value label APrim), M.Map Ref (Object label APrim), Ref))
+process :: (Label label, Abstract p) =>
+           M.Map label (Stmt label) -> S.Set (label, label) ->
+           ScopeChain label -> CallString label -> WorkList label ->
+           Interpret label p (Maybe ((Value label p), M.Map Ref (Object label p), Ref))
 process labelDict flows = process'
     where
         process' _ _ [] = return Nothing
@@ -52,7 +54,7 @@ process labelDict flows = process'
             case stmt of
                 VarDecl l x mExpr -> do
                     val <- case mExpr of
-                            Nothing -> return $ VPrim APrimNull
+                            Nothing -> return $ VPrim (hom PrimNull)
                             Just e  -> interpret l e
                     updateEnvWith_ (bindValue x val) >> cont oldState
                 Assign l (LVar x) expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState
@@ -155,7 +157,7 @@ process labelDict flows = process'
                     case (v1, v2) of
                         (VPrim p1, VPrim p2) ->
                             return $ VPrim (reduce op p1 p2)
-                        _ -> return $ VPrim APrimUndefined
+                        _ -> return $ VPrim (hom PrimUndefined)
 
                 interpret l (CallExpr e args) =
                     interpret l e >>= \case
@@ -179,7 +181,7 @@ process labelDict flows = process'
                                                       (store' `unionStore` (_store env))
                                                       (refCount' `unionRef` (_refCount env)))
                                         return val
-                                    Nothing  -> return $ VPrim APrimUndefined
+                                    Nothing  -> return $ VPrim (hom PrimUndefined)
                             other -> throwError' $ show other ++ " is not closure"
                         other -> throwError' $ show other ++ " is not closure"
 
@@ -187,14 +189,14 @@ process labelDict flows = process'
                     ref <- updateEnvWith $ return <$> storeObj (OClos (Enclosed l start chain) cstr args stmt)
                     return $ VRef ref
 
-lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l (Env l APrim)
+lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l p (Env l p)
 lookupState l chain cstr = do
     s <- get
     case M.lookup (l, chain, cstr) s of
         Nothing -> return initEnv
         Just e  -> return e
 
-showState :: Show l => InterpretState l -> String
+showState :: (Show l, Abstract p) => InterpretState l p -> String
 showState = unlines . map (\((l, sc, cstr), env) -> "--------- Env " ++ show l ++ "----------\n" ++
                                                     "Scope Chain: " ++ show sc ++ "\n" ++
                                                     "Call String: "  ++ show cstr ++ "\n" ++

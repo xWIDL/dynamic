@@ -91,5 +91,3 @@ instance Reduce APrim InfixOp where
     reduce op (APrimBool b1) (APrimBool b2) = APrimBool $ reduce op b1 b2
     reduce op (APrimStr s1)  (APrimStr s2)  = APrimStr  $ reduce op s1 s2
     reduce op _             _               = APrimUndefined
-
-instance Abstract APrim InfixOp where
