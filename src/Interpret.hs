@@ -18,7 +18,7 @@ import Control.Monad.Writer
 class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p) => Abstract p where
 
 type InterpretState label p = M.Map (label, ScopeChain label, CallString label) (Env label p)
-type WorkList label = [(label, label)]
+type WorkList label = [Edge label]
 
 type Interpret label p = StateT (InterpretState label p) (ExceptT String (Writer String))
 
@@ -28,19 +28,19 @@ interpret :: (Label a, Abstract p) => a -> Stmt a->
 interpret start prog =
     let flows = flow prog
         labelDict = labelsOf prog
-        startTask = (start, initLabel prog)
+        startTask = Edge (start, initLabel prog)
         proc = process labelDict flows TopLevel [] ([startTask]) -- : S.toList flows)
         (ret, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
     in  runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
 
 process :: (Label label, Abstract p) =>
-           M.Map label (Stmt label) -> S.Set (label, label) ->
+           M.Map label (Stmt label) -> S.Set (Edge label) ->
            ScopeChain label -> CallString label -> WorkList label ->
            Interpret label p (Maybe ((Value label p), M.Map Ref (Object label p), Ref))
 process labelDict flows = process'
     where
         process' _ _ [] = return Nothing
-        process' chain cstr wl@((l1, l2) : wl') = do
+        process' chain cstr wl@(work : wl') = do
             oldState <- get
             tell $ "========== State ==========\n"
             tell $ "|| chain: " ++ show chain ++ "\n"
@@ -49,6 +49,8 @@ process labelDict flows = process'
             tell $ showState oldState ++ "\n"
 
             env <- lookupM (l1, chain, cstr) oldState
+            -- TODO: Here, we should consider if the edge is a ExitTry/EnterTry
+            --       to decide how to set/unset the catcher
             updateEnvWith_ (unionEnv env)
             stmt <- lookupM l2 labelDict
             case stmt of
@@ -94,9 +96,9 @@ process labelDict flows = process'
                                 then if asFalse == bot
                                     then error $ "How can something " ++ show prim ++
                                             " be neither True or False?"
-                                    else cont oldState (Just [(l, initLabel s2)])
+                                    else cont oldState (Just [Edge (l, initLabel s2)])
                                 else if asFalse == bot
-                                    then cont oldState (Just [(l, initLabel s1)])
+                                    then cont oldState (Just [Edge (l, initLabel s1)])
                                     else cont oldState Nothing
 
                         _ -> cont oldState Nothing
@@ -108,105 +110,117 @@ process labelDict flows = process'
                     cont oldState Nothing -- XXX: How to prove that, it *will* halt?
                 BreakStmt _ -> cont oldState Nothing
                 ContStmt a -> cont oldState Nothing
+                TryStmt _ _ _ _ -> cont oldState Nothing
+
 
                 other -> throwError' $ "can't interpret " ++ show other
-            where
-                throwError' x = throwError ("[Error : " ++ show l2 ++ ", rest: " ++ show wl' ++ "] " ++ x)
+                where
+                    (l1, l2) = case work of
+                                Edge p -> p
+                                ExitTry p _ -> p
+                                EnterTry p _ -> p
 
-                -- Continue without unwinding the stack
-                cont oldState mSucc = do
-                    newState <- get
-                    if oldState == newState
-                        then process' chain cstr wl'
-                        else case mSucc of
-                            Nothing -> do
-                                let wl'' = filter (\(u, v) -> u == l2) $ S.toList flows
-                                process' chain cstr (wl' ++ wl'')
-                            -- Path sensitivity
-                            Just succs -> process' chain cstr (wl' ++ succs)
+                    throwError' x = throwError ("[Error : " ++ show l2 ++ ", rest: " ++ show wl' ++ "] " ++ x)
 
-                -- Local Environment Update
-                updateEnvWith f = do
-                    e <- lookupState l2 chain cstr
-                    (e', a) <- f e --- NOTE: Monadic f
-                    modify $ M.insert (l2, chain, cstr) e'
-                    return a
+                    -- Continue without unwinding the stack
+                    cont oldState mSucc = do
+                        newState <- get
+                        if oldState == newState
+                            then process' chain cstr wl'
+                            else case mSucc of
+                                Nothing -> do
+                                    let wl'' = filter (\case
+                                                        Edge (u, _) -> u == l2
+                                                        ExitTry (u, _) _ -> u == l2
+                                                        EnterTry (u, _) _ -> u == l2)
+                                                      (S.toList flows)
+                                    process' chain cstr (wl' ++ wl'')
+                                -- Path sensitivity
+                                Just succs -> process' chain cstr (wl' ++ succs)
 
-                updateEnvWith_ f = updateEnvWith $ \e -> return (f e, ())
+                    -- Local Environment Update
+                    updateEnvWith f = do
+                        e <- lookupState l2 chain cstr
+                        (e', a) <- f e --- NOTE: Monadic f
+                        modify $ M.insert (l2, chain, cstr) e'
+                        return a
 
-                -- Local and Enclosed Lookup
-                lookupEnvWith sel x = lookupEnvWith' l2 chain cstr
-                    where
-                        lookupEnvWith' l chain cstr = do
-                            env <- lookupState l chain cstr
-                            case M.lookup x (sel env) of
-                                Just a  -> return a
-                                Nothing -> case (chain, cstr) of
-                                    (Enclosed cs _ father, _ : cstr') -> lookupEnvWith' cs father cstr'
-                                    _ -> throwError' $ "Can't find in env: " ++ show x
+                    updateEnvWith_ f = updateEnvWith $ \e -> return (f e, ())
 
-                valueOf = lookupEnvWith _bindings
-                loadObj = lookupEnvWith _store
+                    -- Local and Enclosed Lookup
+                    lookupEnvWith sel x = lookupEnvWith' l2 chain cstr
+                        where
+                            lookupEnvWith' l chain cstr = do
+                                env <- lookupState l chain cstr
+                                case M.lookup x (sel env) of
+                                    Just a  -> return a
+                                    Nothing -> case (chain, cstr) of
+                                        (Enclosed cs _ father, _ : cstr') -> lookupEnvWith' cs father cstr'
+                                        _ -> throwError' $ "Can't find in env: " ++ show x
 
-                reachableFrom (VPrim _) = return M.empty
-                reachableFrom (VRef r) = do
-                    o <- loadObj r
-                    case o of
-                        Object dict   -> foldr M.union (M.singleton r o) <$> mapM reachableFrom (M.elems dict)
-                        OClos _ _ _ _ -> return $ M.singleton r o
-                        OTop          -> error "FIXME: Wow, Magic!"
-                reachableFrom VTop     = error "FIXME: Wow, Magic!"
+                    valueOf = lookupEnvWith _bindings
+                    loadObj = lookupEnvWith _store
 
-                -- Expression interpretation with side-effects
-                -- NOTE: the "l" here is callsite, maybe we should write it more explicitly
-                interpret _ (PrimLit prim) = return $ VPrim (hom prim)
-                interpret l (ObjExpr dict) = do
-                    obj <- Object . M.fromList <$> mapM (\(name, expr) -> (name,) <$> interpret l expr) dict
-                    ref <- updateEnvWith $ return <$> storeObj obj
-                    return $ VRef ref
-                interpret _ (VarExpr x) = valueOf x
-                interpret l (GetExpr expr attr) = do
-                    VRef ref <- interpret l expr -- XXX: Exception
-                    Object dict <- loadObj ref
-                    lookupM attr dict
-                interpret l (InfixExpr e1 op e2) = do
-                    v1 <- interpret l e1
-                    v2 <- interpret l e2
-                    case (v1, v2) of
-                        (VPrim p1, VPrim p2) ->
-                            return $ VPrim (reduce op p1 p2)
-                        _ -> return $ VPrim (hom PrimUndefined)
+                    reachableFrom (VPrim _) = return M.empty
+                    reachableFrom (VRef r) = do
+                        o <- loadObj r
+                        case o of
+                            Object dict   -> foldr M.union (M.singleton r o) <$> mapM reachableFrom (M.elems dict)
+                            OClos _ _ _ _ -> return $ M.singleton r o
+                            OTop          -> error "FIXME: Wow, Magic!"
+                    reachableFrom VTop     = error "FIXME: Wow, Magic!"
 
-                interpret l (CallExpr e args) =
-                    interpret l e >>= \case
-                        VRef ref -> loadObj ref >>= \case
-                            OClos boundChain@(Enclosed _ start _) boundCStr params stmt -> do
-                                bindings' <- M.fromList <$> flip mapM (zip args params) (\(arg, param) -> do
-                                                v <- interpret l arg
-                                                return (param, v))
+                    -- Expression interpretation with side-effects
+                    -- NOTE: the "l" here is callsite, maybe we should write it more explicitly
+                    interpret _ (PrimLit prim) = return $ VPrim (hom prim)
+                    interpret l (ObjExpr dict) = do
+                        obj <- Object . M.fromList <$> mapM (\(name, expr) -> (name,) <$> interpret l expr) dict
+                        ref <- updateEnvWith $ return <$> storeObj obj
+                        return $ VRef ref
+                    interpret _ (VarExpr x) = valueOf x
+                    interpret l (GetExpr expr attr) = do
+                        VRef ref <- interpret l expr -- XXX: Exception
+                        Object dict <- loadObj ref
+                        lookupM attr dict
+                    interpret l (InfixExpr e1 op e2) = do
+                        v1 <- interpret l e1
+                        v2 <- interpret l e2
+                        case (v1, v2) of
+                            (VPrim p1, VPrim p2) ->
+                                return $ VPrim (reduce op p1 p2)
+                            _ -> return $ VPrim (hom PrimUndefined)
 
-                                let newFlows = flow stmt
-                                let newLabelDict = labelsOf stmt
-                                env <- get >>= lookupM (l1, chain, cstr)
-                                modify $ M.insert (start, boundChain, l : boundCStr)
-                                                  (Env bindings' (_store env) (_refCount env) (_catcher env))
-                                                  -- FIXME: Should we just use `env` here?
-                                mVal <- process newLabelDict newFlows boundChain (l : boundCStr) ((start, initLabel stmt) : S.toList newFlows)
-                                case mVal of
-                                    Just (val, store', refCount') -> do
-                                        modify $ M.insert (l2, chain, cstr)
-                                                 (Env (_bindings env)
-                                                      (store' `unionStore` (_store env))
-                                                      (refCount' `unionRef` (_refCount env))
-                                                      (_catcher env))
-                                        return val
-                                    Nothing  -> return $ VPrim (hom PrimUndefined)
+                    interpret l (CallExpr e args) =
+                        interpret l e >>= \case
+                            VRef ref -> loadObj ref >>= \case
+                                OClos boundChain@(Enclosed _ start _) boundCStr params stmt -> do
+                                    bindings' <- M.fromList <$> flip mapM (zip args params) (\(arg, param) -> do
+                                                    v <- interpret l arg
+                                                    return (param, v))
+
+                                    let newFlows = flow stmt
+                                    let newLabelDict = labelsOf stmt
+                                    env <- get >>= lookupM (l1, chain, cstr)
+                                    modify $ M.insert (start, boundChain, l : boundCStr)
+                                                      (Env bindings' (_store env) (_refCount env) (_catcher env))
+                                                      -- FIXME: Should we just use `env` here?
+                                    mVal <- process newLabelDict newFlows boundChain (l : boundCStr)
+                                                    [Edge (start, initLabel stmt)]
+                                    case mVal of
+                                        Just (val, store', refCount') -> do
+                                            modify $ M.insert (l2, chain, cstr)
+                                                     (Env (_bindings env)
+                                                          (store' `unionStore` (_store env))
+                                                          (refCount' `unionRef` (_refCount env))
+                                                          (_catcher env))
+                                            return val
+                                        Nothing  -> return $ VPrim (hom PrimUndefined)
+                                other -> throwError' $ show other ++ " is not closure"
                             other -> throwError' $ show other ++ " is not closure"
-                        other -> throwError' $ show other ++ " is not closure"
 
-                interpret l clos@(Closure start args stmt) = do
-                    ref <- updateEnvWith $ return <$> storeObj (OClos (Enclosed l start chain) cstr args stmt)
-                    return $ VRef ref
+                    interpret l clos@(Closure start args stmt) = do
+                        ref <- updateEnvWith $ return <$> storeObj (OClos (Enclosed l start chain) cstr args stmt)
+                        return $ VRef ref
 
 lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l p (Env l p)
 lookupState l chain cstr = do

@@ -1,6 +1,7 @@
 -- AST: A subset of JavaScript
 
-{-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable #-}
+{-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable,
+             LambdaCase #-}
 
 module AST where
 
@@ -25,7 +26,7 @@ data Stmt a = VarDecl a Name (Maybe (Expr a))
             | Skip a
             | ReturnStmt a (Maybe (Expr a))
             | Seq (Stmt a) (Stmt a)
-            | TryStmt a (Stmt a) (Maybe (a, Name, Stmt a))
+            | TryStmt a (Stmt a) a (Maybe (a, Name, Stmt a))
             | ThrowStmt a (Expr a)
             deriving (Eq, Functor, Foldable, Traversable)
 
@@ -65,9 +66,9 @@ instance Show a => Show (Stmt a) where
         Nothing -> "return " ++ show a ++ ";"
         Just e  -> "return " ++ show a ++ " " ++ show e ++ ";"
     show (Seq s1 s2) = show s1 ++ "\n" ++ show s2
-    show (TryStmt l s Nothing) = "try " ++ show l ++ " {\n" ++ indent (show s) ++ "}"
-    show (TryStmt l s (Just (lc, e, sc))) =
-        "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} catch " ++
+    show (TryStmt l s exit Nothing) = "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} " ++ show exit
+    show (TryStmt l s exit (Just (lc, e, sc))) =
+        "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} " ++ show exit ++ " catch " ++
         show lc ++ " (" ++ show e ++ ") {\n" ++ indent (show sc) ++ "}"
     show (ThrowStmt l e) = "throw " ++ show l ++ " " ++ show e ++ ";"
 
@@ -116,7 +117,7 @@ instance Label a => Flow Stmt a where
     initLabel (Skip l)              = l
     initLabel (ReturnStmt l _)      = l
     initLabel (Seq s _)             = initLabel s
-    initLabel (TryStmt l _ _)       = l
+    initLabel (TryStmt l _ _ _)     = l
     initLabel (ThrowStmt l _)       = l
 
     finalLabels (VarDecl l _ _)     = singleton l
@@ -128,20 +129,22 @@ instance Label a => Flow Stmt a where
     finalLabels (Skip l)            = singleton l
     finalLabels (ReturnStmt l _)    = singleton l
     finalLabels (Seq s1 s2)         = finalLabels s2
-    finalLabels (TryStmt _ s Nothing) = finalLabels s
-    finalLabels (TryStmt _ s (Just (_, _, sc))) = finalLabels s `union` finalLabels sc
+    finalLabels (TryStmt _ s _ Nothing) = finalLabels s
+    finalLabels (TryStmt _ _ exit (Just (_, _, sc))) = singleton exit `union` finalLabels sc
     finalLabels (ThrowStmt l _)     = singleton l
 
-    flow (If l _ s1 s2) = fromList [(l, initLabel s1), (l, initLabel s2)] `union`
+    flow (If l _ s1 s2) = fromList [Edge (l, initLabel s1), Edge (l, initLabel s2)] `union`
                           flow s1 `union` flow s2
-    flow (While l _ s)  = singleton (l, initLabel s) `union`
-                          S.fromList (scanCont s (\l' -> (l', l))) `union`
+    flow (While l _ s)  = singleton (Edge (l, initLabel s)) `union`
+                          S.fromList (scanCont s (\l' -> Edge (l', l))) `union`
                           flow s
-    flow (Seq s1 s2)    = flow s1 `union` S.map (,initLabel s2) (finalLabels s1) `union` flow s2
-    flow (TryStmt l s Nothing) = flow s `union` S.singleton (l, initLabel s)
-    flow (TryStmt l s (Just (lc, e, sc))) =
-        flow s `union` S.singleton (l, initLabel s) `union`
-        flow sc `union` S.singleton (lc, initLabel sc)
+    flow (Seq s1 s2)    = flow s1 `union` S.map (\l -> Edge (l, initLabel s2)) (finalLabels s1) `union` flow s2
+    flow (TryStmt l s _ Nothing) = flow s `union` S.singleton (Edge (l, initLabel s))
+    flow (TryStmt l s exit (Just (lc, e, sc))) =
+        flow s `union` S.singleton (Edge (l, initLabel s)) `union`
+        flow sc `union` S.singleton (Edge (lc, initLabel sc)) `union`
+        S.map (\l' -> ExitTry (l', exit) l) (finalLabels s) `union`
+        S.singleton (EnterTry (l, initLabel s) lc)
     flow _              = empty
 
 scanCont :: Stmt a -> (a -> b) -> [b]
@@ -167,3 +170,8 @@ labelsOf s = case s of
     Skip l          -> M.singleton l s
     ReturnStmt l _  -> M.singleton l s
     Seq s1 s2       -> labelsOf s1 `M.union` labelsOf s2
+    TryStmt l s' _ Nothing
+                    -> M.singleton l s `M.union` labelsOf s'
+    TryStmt l s' _ (Just (lc, _, sc))
+                    -> M.singleton l s `M.union` labelsOf s' `M.union` labelsOf sc
+    ThrowStmt l _   -> M.singleton l s

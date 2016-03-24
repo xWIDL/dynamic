@@ -16,6 +16,8 @@ instance Show L where
 
 instance Label L
 
+-- NOTE: we first translate ... then relabel. So it is okay to introduce
+--       whatever a during translation
 parseJS :: String -> Either String (Program L)
 parseJS s = case ES.parseFromString s of
     Right js -> translate js >>= return . relabel
@@ -64,12 +66,12 @@ translateStmt (ES.ContinueStmt l Nothing) = return (ContStmt l)
 
 translateStmt (ES.TryStmt l s Nothing Nothing) = do
     s' <- translateStmt s
-    return $ TryStmt l s' Nothing
+    return $ TryStmt l s' l Nothing
 
 translateStmt (ES.TryStmt l s (Just (ES.CatchClause lc i sc)) Nothing) = do
     s'  <- translateStmt s
     sc' <- translateStmt sc
-    return (TryStmt l s' (Just (lc, idToName i, sc')))
+    return (TryStmt l s' l (Just (lc, idToName i, sc')))
 
 translateStmt other = Left $ "Can't translate " ++ show other
 
