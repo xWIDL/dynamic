@@ -49,9 +49,14 @@ process labelDict flows = process'
             tell $ showState oldState ++ "\n"
 
             env <- lookupM (l1, chain, cstr) oldState
-            -- TODO: Here, we should consider if the edge is a ExitTry/EnterTry
-            --       to decide how to set/unset the catcher
-            updateEnvWith_ (unionEnv env)
+
+            case work of
+                Edge _ -> updateEnvWith_ (unionEnv env)
+                EnterTry _ catcher -> updateEnvWith_ (unionEnv (env { _catcher = Just catcher}))
+                ExitTry _ tryHead  -> do
+                    envOld <- lookupM (tryHead, chain, cstr) oldState
+                    updateEnvWith_ (unionEnv (env { _catcher = _catcher envOld }))
+
             stmt <- lookupM l2 labelDict
             case stmt of
                 VarDecl l x mExpr -> do
@@ -111,7 +116,14 @@ process labelDict flows = process'
                 BreakStmt _ -> cont oldState Nothing
                 ContStmt a -> cont oldState Nothing
                 TryStmt _ _ _ _ -> cont oldState Nothing
+                ThrowStmt l e -> do
+                    ((catcher, caught), csc, ccs) <- lookupEnvWith "can't find catcher" _catcher
+                    catcherEnv <- lookupM (catcher, csc, ccs) oldState
+                    v <- interpret l e
 
+                    modify $ M.insert (catcher, csc, ccs)
+                                      (catcherEnv { _bindings = M.insert caught v (_bindings catcherEnv) })
+                    cont oldState (Just [Edge (l, catcher)])
 
                 other -> throwError' $ "can't interpret " ++ show other
                 where
@@ -148,18 +160,20 @@ process labelDict flows = process'
                     updateEnvWith_ f = updateEnvWith $ \e -> return (f e, ())
 
                     -- Local and Enclosed Lookup
-                    lookupEnvWith sel x = lookupEnvWith' l2 chain cstr
+                    lookupEnvWith err sel = lookupEnvWith' l2 chain cstr
                         where
                             lookupEnvWith' l chain cstr = do
                                 env <- lookupState l chain cstr
-                                case M.lookup x (sel env) of
-                                    Just a  -> return a
+                                case sel env of
+                                    Just a  -> return (a, chain, cstr)
                                     Nothing -> case (chain, cstr) of
                                         (Enclosed cs _ father, _ : cstr') -> lookupEnvWith' cs father cstr'
-                                        _ -> throwError' $ "Can't find in env: " ++ show x
+                                        _ -> throwError' err
 
-                    valueOf = lookupEnvWith _bindings
-                    loadObj = lookupEnvWith _store
+                    valueOf x = (\(a, _, _) -> a) <$> lookupEnvWith ("can't find value of binding: " ++ show x)
+                                                                    (M.lookup x . _bindings)
+                    loadObj x = (\(a, _, _) -> a) <$> lookupEnvWith ("can't find object of ref: " ++ show x)
+                                                                    (M.lookup x . _store)
 
                     reachableFrom (VPrim _) = return M.empty
                     reachableFrom (VRef r) = do

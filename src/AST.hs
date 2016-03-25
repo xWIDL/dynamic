@@ -6,16 +6,13 @@
 module AST where
 
 import Core.Flow
+import Common
+
 import Data.Set hiding (foldr, map)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
 type Program a = Stmt a
-
-newtype Name = Name String deriving (Eq, Ord)
-
-instance Show Name where
-    show (Name x) = x
 
 data Stmt a = VarDecl a Name (Maybe (Expr a))
             | Assign a (LVal a) (Expr a)
@@ -144,7 +141,7 @@ instance Label a => Flow Stmt a where
         flow s `union` S.singleton (Edge (l, initLabel s)) `union`
         flow sc `union` S.singleton (Edge (lc, initLabel sc)) `union`
         S.map (\l' -> ExitTry (l', exit) l) (finalLabels s) `union`
-        S.singleton (EnterTry (l, initLabel s) lc)
+        S.singleton (EnterTry (l, initLabel s) (lc, e))
     flow _              = empty
 
 scanCont :: Stmt a -> (a -> b) -> [b]

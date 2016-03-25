@@ -3,9 +3,10 @@
 module Core.Flow where
 
 import Data.Set (Set)
+import Common
 
 data Edge a = Edge (a, a)
-            | EnterTry (a, a) a
+            | EnterTry (a, a) (a, Name)
             | ExitTry (a, a) a
             deriving (Eq, Ord, Show)
             -- XXX: Maybe we should make inter-procedural transition an edge

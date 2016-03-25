@@ -5,6 +5,7 @@ module Model where
 
 import AST
 import Core.Abstract
+import Common
 
 import qualified Data.Map as M
 import Control.Lens
@@ -47,7 +48,7 @@ data Env a p = Env {
     _bindings :: Bindings a p,
     _store    :: Store a p,
     _refCount :: Ref,
-    _catcher  :: Maybe a
+    _catcher  :: Maybe (a, Name)
 } deriving (Eq)
 
 instance (Show a, Lattice p, Show p) => Show (Env a p) where
