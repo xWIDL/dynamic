@@ -26,8 +26,8 @@ main' file opt = do
             case interpret (L (-1)) prog of
                 (Right (_, s), logging)  -> do
                     if opt == ShowLog
-                        then putStrLn $ showState (s :: InterpretState L APrim) ++
-                                        "\n************** log **************\n\n" ++ logging
+                        then putStrLn $ "\n************** log **************\n\n" ++ logging ++
+                                        showState (s :: InterpretState L APrim)
                         else putStrLn $ showState (s :: InterpretState L APrim)
                 (Left err, logging) ->
                     putStrLn $ "Failed: " ++ err ++ ", log:\n" ++ logging

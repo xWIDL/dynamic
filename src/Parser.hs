@@ -74,6 +74,10 @@ translateStmt (ES.TryStmt l s (Just (ES.CatchClause lc i sc)) Nothing) = do
     sc' <- translateStmt sc
     return (TryStmt l s' l (Just (lc, idToName i, sc')))
 
+translateStmt (ES.ThrowStmt a e) = do
+    e' <- translateExpr e
+    return (ThrowStmt a e')
+
 translateStmt other = Left $ "Can't translate " ++ show other
 
 translateExprStmt :: Show a => a -> ES.Expression a -> Either String (Stmt a)

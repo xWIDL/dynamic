@@ -53,6 +53,7 @@ data Env a p = Env {
 
 instance (Show a, Lattice p, Show p) => Show (Env a p) where
     show env = "refCount: " ++ show (_refCount env) ++ "\n" ++
+               "catcher: " ++ show (_catcher env) ++ "\n" ++
                "bindings:\n" ++ concatMap (\(Name x, v) -> x ++ "\t" ++ show v ++ "\n") (M.toList (_bindings env)) ++
                "store:\n" ++ concatMap (\(Ref i, o) -> show i ++ "\t" ++ show o ++ "\n") (M.toList (_store env))
 
@@ -79,8 +80,8 @@ updateObj r o env = env { _store = M.insert r o (_store env) }
 
 -- NOTE: directional union
 unionEnv :: (Eq a, Lattice p) => Env a p -> Env a p -> Env a p
-unionEnv (Env b1 s1 rc1 _) (Env b2 s2 rc2 oldc) =
-    Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2) oldc
+unionEnv (Env b1 s1 rc1 c) (Env b2 s2 rc2 _) =
+    Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2) c
 
 unionBindings :: (Eq a, Lattice p) => Bindings a p -> Bindings a p -> Bindings a p
 unionBindings = M.unionWith unionValue
