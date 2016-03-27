@@ -18,3 +18,6 @@ instance Reduce AUndefined InfixOp where
 
 instance Hom AUndefined String where
     hom Undefined = "undefined"
+
+instance Hom AUndefined Bool where
+    hom Undefined = False

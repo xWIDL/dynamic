@@ -17,6 +17,17 @@ class Eq a => Lattice a where
 class Hom a b where
     hom :: a -> b
 
+instance (Functor f, Hom a b) => Hom (f a) (f b) where
+    hom = fmap hom
+
+instance (Applicative f) => Hom a (f a) where
+    hom = pure
+
 -- Monomorphic reduction
 class Reduce a op where
     reduce :: op -> a -> a -> a
+
+-- Augmented meet
+meet' :: forall a b. Lattice b => Hom a [b] => b -> a -> b
+meet' b a = let botb = bot :: b
+            in  foldr (\b' ret -> (b `meet` b') `join` ret) botb (hom a :: [b])

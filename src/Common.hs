@@ -1,4 +1,5 @@
 -- Common: Commonly useful utilities
+{-# LANGUAGE PolyKinds #-}
 
 module Common where
 
@@ -14,3 +15,5 @@ newtype Name = Name String deriving (Eq, Ord)
 
 instance Show Name where
     show (Name x) = x
+
+data Proxy t = Proxy

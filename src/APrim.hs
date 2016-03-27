@@ -1,18 +1,18 @@
 -- Abstract Primitive
 
 {-# LANGUAGE TemplateHaskell, PolyKinds, AllowAmbiguousTypes,
-             UndecidableInstances, ScopedTypeVariables,
-             RecordWildCards, RankNTypes #-}
+             UndecidableInstances, RecordWildCards #-}
 module APrim where
 
 import Core.Abstract
+import Core.Coercion
 import AST
 import Primitive.Null
 import Primitive.Undefined
 import Primitive.Number
 import Primitive.Bool
 import Primitive.String
-
+import Common
 
 import Control.Lens
 
@@ -26,20 +26,6 @@ data APrim = APrim {
 
 $(makeLenses ''APrim)
 
--- Coercion Framework
-
-class (Lattice a, Lattice b, Hom a bconc, Hom bconc b) => HomLattice a (bconc :: *) b where
-    homlat :: Proxy bconc -> a -> b
-
-    homlat _ a | a == top  = top
-               | a == bot  = bot
-               | otherwise = hom (hom a :: bconc) :: b
-
-data Proxy t = Proxy
-
-class Coerce aconc where
-    coerce :: Proxy aconc -> APrim -> APrim
-
 -- Coerce to String
 
 instance HomLattice AUndefined String AString where
@@ -48,7 +34,7 @@ instance HomLattice ABool String AString where
 instance HomLattice ANum String AString where
 instance HomLattice AString String AString where
 
-instance Coerce String where
+instance Coerce APrim String where
     coerce proxy p@(APrim a b c d e) =
         let astr = homlat proxy a `join`
                    homlat proxy b `join`
@@ -63,12 +49,29 @@ instance HomLattice ANull Double ANum where
 instance HomLattice ABool Double ANum where
 instance HomLattice ANum Double ANum where
 
-instance Coerce Double where
+instance Coerce APrim Double where
     coerce proxy p@(APrim a b c d e) =
         let n = homlat proxy b `join`
                 homlat proxy c `join`
                 homlat proxy d
         in  (anum .~ n) p
+
+-- Coerce to Bool
+
+instance HomLattice AUndefined Bool ABool where
+instance HomLattice AString Bool ABool where
+instance HomLattice ANull Bool ABool where
+instance HomLattice ABool Bool ABool where
+instance HomLattice ANum Bool ABool where
+
+instance Coerce APrim Bool where
+    coerce proxy p@(APrim a b c d e) =
+        let b = homlat proxy a `join`
+                homlat proxy b `join`
+                homlat proxy c `join`
+                homlat proxy d `join`
+                homlat proxy e
+        in  (abool .~ b) p
 
 -- Lattice product
 instance Lattice APrim where
@@ -109,7 +112,7 @@ instance Reduce APrim InfixOp where
 
 -- Path Sentivitity Framework
 class Match a where
-    match :: Coerce aconc => Proxy aconc -> [a] -> Lens' APrim a -> APrim -> [Maybe APrim]
+    match :: Coerce APrim aconc => Proxy aconc -> [a] -> Lens' APrim a -> APrim -> [Maybe APrim]
 
 instance (Hom a [AUndefined], Hom a [ANull],
           Hom a [AString], Hom a [ANum], Hom a [ABool]) => Match a where
@@ -122,7 +125,30 @@ instance (Hom a [AUndefined], Hom a [ANull],
                                   (_abool `meet'` field)
                                   (_anum `meet'` field)
                                   (_astring `meet'` field)))
-        where
-            meet' :: forall a b. Lattice b => Hom a [b] => b -> a -> b
-            meet' b a = let botb = bot :: b
-                        in  foldr (\b' ret -> (b `meet` b') `join` ret) botb (hom a :: [b])
+
+instance Hom ABool [ANull] where
+    hom TopBool = [top]
+    hom BotBool = [bot]
+    hom TrueBool = []
+    hom FalseBool = [Null]
+
+instance Hom ABool [AUndefined] where
+    hom TopBool = [top]
+    hom BotBool = [bot]
+    hom TrueBool = []
+    hom FalseBool = [Undefined]
+
+instance Hom ABool [ANum] where
+    hom TopBool = [top]
+    hom BotBool = [bot]
+    hom TrueBool = [NegNum, PosNum]
+    hom FalseBool = [ZeroNum]
+
+instance Hom ABool [AString] where
+    hom TopBool = [top]
+    hom BotBool = [bot]
+    hom TrueBool = [NonEmptyString]
+    hom FalseBool = [EmptyString]
+
+matchBool :: APrim -> [Maybe APrim]
+matchBool = match (Proxy :: Proxy Bool) [TrueBool, FalseBool] abool

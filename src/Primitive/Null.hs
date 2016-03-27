@@ -24,3 +24,6 @@ instance Hom ANull String where
 
 instance Hom ANull Double where
     hom Null = 0.0
+
+instance Hom ANull Bool where
+    hom Null = False

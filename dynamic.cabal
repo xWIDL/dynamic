@@ -24,6 +24,7 @@ executable dynamic
                        Parser
                        Common
                        Core.Abstract
+                       Core.Coercion
                        APrim
                        Primitive.Bool
                        Primitive.Number
@@ -35,6 +36,8 @@ executable dynamic
   default-extensions:  FlexibleInstances
                        MultiParamTypeClasses
                        FlexibleContexts
+                       RankNTypes
+                       ScopedTypeVariables
 
   build-depends:       base >=4.8 && <4.9, containers, lens, mtl,
                        language-ecmascript
