@@ -13,8 +13,10 @@ class Eq a => Lattice a where
     meet a b | a == b = a
              | a /= b = bot
 
+-- Homomorphism
 class Hom a b where
     hom :: a -> b
 
+-- Monomorphic reduction
 class Reduce a op where
     reduce :: op -> a -> a -> a

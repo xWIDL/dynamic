@@ -25,6 +25,12 @@ executable dynamic
                        Common
                        Core.Abstract
                        APrim
+                       Primitive.Bool
+                       Primitive.Number
+                       Primitive.Undefined
+                       Primitive.Null
+                       Primitive.String
+
   -- other-modules:
   default-extensions:  FlexibleInstances
                        MultiParamTypeClasses

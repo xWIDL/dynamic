@@ -1,164 +1,128 @@
 -- Abstract Primitive
 
+{-# LANGUAGE TemplateHaskell, PolyKinds, AllowAmbiguousTypes,
+             UndecidableInstances, ScopedTypeVariables,
+             RecordWildCards, RankNTypes #-}
 module APrim where
 
 import Core.Abstract
 import AST
+import Primitive.Null
+import Primitive.Undefined
+import Primitive.Number
+import Primitive.Bool
+import Primitive.String
 
-data APrim = APrimNum ANum | APrimBool ABool | APrimStr AString
-           | APrimNull | APrimUndefined | APrimBot deriving (Show, Eq)
-data ANum = NegNum | ZeroNum | PosNum | TopNum | BotNum deriving (Show, Eq)
-data ABool = FalseBool | TrueBool | TopBool | BotBool deriving (Show, Eq)
-data AString = EmptyString | NonEmptyString | TopString | BotString deriving (Show, Eq)
 
--- FIXME: In JavaScript, 1 / 0 will give Infinity
+import Control.Lens
 
--- Abstract Number
+data APrim = APrim {
+    _aundefined :: AUndefined,
+    _anull :: ANull,
+    _abool :: ABool,
+    _anum  :: ANum,
+    _astring :: AString
+} deriving (Show, Eq)
 
-instance Lattice ANum where
-    top = TopNum
-    bot = BotNum
-
-instance Hom Double ANum where
-    hom x | x >  0 = PosNum
-          | x <  0 = NegNum
-          | x == 0 = ZeroNum
-
-instance Reduce ANum InfixOp where
-    reduce OPlus   PosNum    PosNum  = PosNum
-    reduce OPlus   PosNum    NegNum  = TopNum
-    reduce OPlus   NegNum    NegNum  = NegNum
-    reduce OPlus   NegNum    PosNum  = TopNum
-    reduce OPlus   x         ZeroNum = x
-    reduce OPlus   ZeroNum   x       = x
-
-    reduce OSubs   PosNum    NegNum  = PosNum
-    reduce OSubs   PosNum    PosNum  = TopNum
-    reduce OSubs   NegNum    PosNum  = NegNum
-    reduce OSubs   NegNum    NegNum  = TopNum
-    reduce OSubs   x         ZeroNum = x
-    reduce OSubs   ZeroNum   x       = neg x
-
-    reduce OMult   _         ZeroNum = ZeroNum
-    reduce OMult   x         PosNum  = x
-    reduce OMult   x         NegNum  = neg x
-
-    reduce ODiv    _         ZeroNum = error "Can't process division by zero"
-    reduce ODiv    x         PosNum  = x
-    reduce ODiv    x         NegNum  = neg x
-
-neg :: ANum -> ANum
-neg ZeroNum = ZeroNum
-neg NegNum  = PosNum
-neg PosNum  = NegNum
-
--- Abstract Bool
-
-instance Lattice ABool where
-    top = TopBool
-    bot = BotBool
-
-instance Hom Bool ABool where
-    hom True = TrueBool
-    hom False = FalseBool
-
-instance Reduce ABool InfixOp where
-    reduce _ _ _ = TopBool -- FIXME: boilerplate code
-
--- Abstract String
-
-instance Lattice AString where
-    top = TopString
-    bot = BotString
-
-instance Hom String AString where
-    hom "" = EmptyString
-    hom _  = NonEmptyString
-
-instance Reduce AString InfixOp where
-    reduce OPlus EmptyString EmptyString = EmptyString
-    reduce OPlus _           _           = NonEmptyString
-    reduce _     _           _           = error "undefined operation over string"
+$(makeLenses ''APrim)
 
 -- Coercion Framework
 
-instance Hom ANum AString where
-    hom BotNum = BotString
-    hom _      = NonEmptyString
+class (Lattice a, Lattice b, Hom a bconc, Hom bconc b) => HomLattice a (bconc :: *) b where
+    homlat :: Proxy bconc -> a -> b
 
-instance Hom ABool AString where
-    hom BotBool = BotString
-    hom _       = NonEmptyString
+    homlat _ a | a == top  = top
+               | a == bot  = bot
+               | otherwise = hom (hom a :: bconc) :: b
 
-instance Hom AString ABool where
-    hom EmptyString     = FalseBool
-    hom NonEmptyString  = TrueBool
-    hom BotString       = BotBool
-    hom TopString       = TopBool
+data Proxy t = Proxy
 
-instance Hom ANum ABool where
-    hom NegNum  = TrueBool
-    hom PosNum  = TrueBool
-    hom ZeroNum = FalseBool
-    hom TopNum  = TopBool
-    hom BotNum  = BotBool
+class Coerce aconc where
+    coerce :: Proxy aconc -> APrim -> APrim
 
-instance Hom ABool ANum where
-    hom TrueBool  = PosNum
-    hom FalseBool = ZeroNum
-    hom BotBool   = BotNum
-    hom TopBool   = TopNum
+-- Coerce to String
 
--- Abstract Primitive
+instance HomLattice AUndefined String AString where
+instance HomLattice ANull String AString where
+instance HomLattice ABool String AString where
+instance HomLattice ANum String AString where
+instance HomLattice AString String AString where
 
+instance Coerce String where
+    coerce proxy p@(APrim a b c d e) =
+        let astr = homlat proxy a `join`
+                   homlat proxy b `join`
+                   homlat proxy c `join`
+                   homlat proxy d `join`
+                   homlat proxy e
+        in  (astring .~ astr) p
+
+-- Coerce to Number
+
+instance HomLattice ANull Double ANum where
+instance HomLattice ABool Double ANum where
+instance HomLattice ANum Double ANum where
+
+instance Coerce Double where
+    coerce proxy p@(APrim a b c d e) =
+        let n = homlat proxy b `join`
+                homlat proxy c `join`
+                homlat proxy d
+        in  (anum .~ n) p
+
+-- Lattice product
 instance Lattice APrim where
-    -- NOTE: Make "flat" lattice non-flat by explicit coercion
-    --       The observation is that, it is not really flat, because
-    --       1 meet true is true (XXX: it is met to Bool, but is this decision valid?)
-    meet (APrimNum n) (APrimBool b) =
-        let b' = hom n `meet` b
-        in  if b' == bot then bot else APrimBool b'
+    meet p1 p2 = APrim (_aundefined p1 `meet` _aundefined p2)
+                       (_anull p1      `meet` _anull p2)
+                       (_abool p1      `meet` _abool p2)
+                       (_anum p1       `meet` _anum p2)
+                       (_astring p1    `meet` _astring p2)
 
-    meet (APrimBool b) (APrimNum n) =
-        let b' = b `meet` hom n
-        in  if b' == bot then bot else APrimBool b'
+    join p1 p2 = APrim (_aundefined p1 `join` _aundefined p2)
+                       (_anull p1      `join` _anull p2)
+                       (_abool p1      `join` _abool p2)
+                       (_anum p1       `join` _anum p2)
+                       (_astring p1    `join` _astring p2)
 
-    meet (APrimStr n) (APrimBool b) =
-        let b' = hom n `meet` b
-        in  if b' == bot then bot else APrimBool b'
+    top = APrim top top top top top
 
-    meet (APrimBool b) (APrimStr n) =
-        let b' = b `meet` hom n
-        in  if b' == bot then bot else APrimBool b'
-
-    meet p1 p2 | p1 == p2 = p1
-               | p1 /= p2 = bot
-
-    top = APrimUndefined -- XXX: This is an immature decision
-    bot = APrimBot
+    bot = APrim bot bot bot bot bot
 
 instance Hom Prim APrim where
-    hom (PrimNum n)   = APrimNum  $ hom n
-    hom (PrimStr n)   = APrimStr  $ hom n
-    hom (PrimBool n)  = APrimBool $ hom n
-    hom PrimNull      = APrimNull
-    hom PrimUndefined = APrimUndefined
+    hom (PrimNum n)   = anum .~ (hom n) $ bot
+    hom (PrimStr n)   = astring .~ (hom n) $ bot
+    hom (PrimBool n)  = abool .~ (hom n) $ bot
+    hom PrimNull      = anull .~ (hom PrimNull) $ bot
+    hom PrimUndefined = aundefined .~ (hom PrimUndefined) $ bot
 
+-- Reduction Framework
 instance Reduce APrim InfixOp where
-    -- Homogenous Reduction
-    reduce op (APrimNum n1)  (APrimNum n2)  = APrimNum  $ reduce op n1 n2
-    reduce op (APrimBool b1) (APrimBool b2) = APrimBool $ reduce op b1 b2
-    reduce op (APrimStr s1)  (APrimStr s2)  = APrimStr  $ reduce op s1 s2
+    reduce op p1 p2 =
+        let p1n = coerce (Proxy :: Proxy Double) p1
+            p2n = coerce (Proxy :: Proxy Double) p2
+            p1s = coerce (Proxy :: Proxy String) p1
+            p2s = coerce (Proxy :: Proxy String) p2
+            n   = reduce op (_anum p1n) (_anum p2n)
+            s   = reduce op (_astring p1n) (_astring p2n)
+        in  (anum .~ n) bot `join` (astring .~ s) bot
 
-    -- Heterogenous Reduction
-    -- NOTE: The priority of coercion is hard-encoded
-    reduce op (APrimNum n) (APrimBool b) = APrimNum $ reduce op n (hom b)
-    reduce op (APrimBool b) (APrimNum n) = APrimNum $ reduce op (hom b) n
 
-    reduce op (APrimStr s) (APrimNum n)  = APrimStr $ reduce op s (hom n)
-    reduce op (APrimNum n) (APrimStr s)  = APrimStr $ reduce op (hom n) s
-    reduce op (APrimStr s) (APrimBool b) = APrimStr $ reduce op s (hom b)
-    reduce op (APrimBool b) (APrimStr s) = APrimStr $ reduce op (hom b) s
+-- Path Sentivitity Framework
+class Match a where
+    match :: Coerce aconc => Proxy aconc -> [a] -> Lens' APrim a -> APrim -> [Maybe APrim]
 
-    -- undefined
-    reduce op _ _ = APrimUndefined
+instance (Hom a [AUndefined], Hom a [ANull],
+          Hom a [AString], Hom a [ANum], Hom a [ABool]) => Match a where
+    match proxy as lens p@APrim{..} = flip map as $ \field ->
+        let tester = coerce proxy p `meet` ((lens .~ field) bot)
+        in  if tester == bot
+                then Nothing
+                else (Just (APrim (_aundefined `meet'` field)
+                                  (_anull `meet'` field)
+                                  (_abool `meet'` field)
+                                  (_anum `meet'` field)
+                                  (_astring `meet'` field)))
+        where
+            meet' :: forall a b. Lattice b => Hom a [b] => b -> a -> b
+            meet' b a = let botb = bot :: b
+                        in  foldr (\b' ret -> (b `meet` b') `join` ret) botb (hom a :: [b])
