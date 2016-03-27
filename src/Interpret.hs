@@ -16,6 +16,7 @@ import Control.Monad.Except
 import Control.Monad.Writer
 
 class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p) => Abstract p where
+    matchBool :: p -> (Maybe p, Maybe p)
 
 type InterpretState label p = M.Map (label, ScopeChain label, CallString label) (Env label p)
 type WorkList label = [Edge label]
@@ -93,19 +94,21 @@ process labelDict flows = process'
                     If l e s1 s2 -> do
                         val <- interpret l e
                         case val of
-                            VPrim prim -> do
-                                let aTrue   = hom (PrimBool True)
-                                let aFalse  = hom (PrimBool False)
-                                let asTrue  = prim `meet` aTrue
-                                let asFalse = prim `meet` aFalse
-                                if asTrue == bot
-                                    then if asFalse == bot
-                                        then error $ "How can something " ++ show prim ++
+                            VPrim prim ->
+                                case matchBool prim of
+                                    (Nothing, Nothing) ->
+                                        error $ "How can something " ++ show prim ++
                                                 " be neither True or False?"
-                                        else cont oldState (Just [Edge (l, initLabel s2)])
-                                    else if asFalse == bot
-                                        then cont oldState (Just [Edge (l, initLabel s1)])
-                                        else cont oldState Nothing
+                                    (Just tpv, Nothing) ->
+                                        cont oldState (Just [Edge (l, initLabel s1)])
+                                    (Nothing, Just fpv) ->
+                                        cont oldState (Just [Edge (l, initLabel s2)])
+                                    (Just tpv, Just fpv) -> cont oldState Nothing
+                                    -- FIXME: even we got the restricted primitive value,
+                                    --        it is still awkward to use. It is not easy even
+                                    --        the VarExpr case, since we don't have a way to
+                                    --        prevent the more general case of binding to overwrite
+                                    --        our restriction.
 
                             _ -> cont oldState Nothing
 
@@ -161,6 +164,11 @@ process labelDict flows = process'
                     return a
 
                 updateEnvWith_ f = updateEnvWith $ \e -> return (f e, ())
+
+                addBinding l chain cstr x v = do
+                    e <- lookupState l chain cstr
+                    modify $ M.insert (l, chain, cstr)
+                                      (e { _bindings = M.insert x v (_bindings e) })
 
                 -- Local and Enclosed Lookup
                 lookupEnvWith err sel = lookupEnvWith' l2 chain cstr

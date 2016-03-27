@@ -7,11 +7,20 @@ class Eq a => Lattice a where
     top  :: a
     bot  :: a
 
-    -- default implementation for a flat lattice
-    join a b | a == b = a
-             | a /= b = top
-    meet a b | a == b = a
-             | a /= b = bot
+    -- default implementation
+    join a b | a == top = top
+             | b == top = top
+             | a == bot = b
+             | b == bot = a
+             | a == b   = a
+             | a /= b   = top
+
+    meet a b | a == top = b
+             | b == top = a
+             | a == bot = bot
+             | b == bot = bot
+             | a == b   = a
+             | a /= b   = bot
 
 -- Homomorphism
 class Hom a b where

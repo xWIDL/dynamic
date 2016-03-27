@@ -7,13 +7,8 @@ module APrim where
 import Core.Abstract
 import Core.Coercion
 import AST
-import Primitive.Null
-import Primitive.Undefined
-import Primitive.Number
-import Primitive.Bool
-import Primitive.String
 import Common
-
+import Primitive
 import Control.Lens
 
 data APrim = APrim {
@@ -66,12 +61,12 @@ instance HomLattice ANum Bool ABool where
 
 instance Coerce APrim Bool where
     coerce proxy p@(APrim a b c d e) =
-        let b = homlat proxy a `join`
+        let bool = homlat proxy a `join`
                 homlat proxy b `join`
                 homlat proxy c `join`
                 homlat proxy d `join`
                 homlat proxy e
-        in  (abool .~ b) p
+        in  (abool .~ bool) p
 
 -- Lattice product
 instance Lattice APrim where
@@ -114,15 +109,14 @@ instance Reduce APrim InfixOp where
 class Match a where
     match :: Coerce APrim aconc => Proxy aconc -> [a] -> Lens' APrim a -> APrim -> [Maybe APrim]
 
-instance (Hom a [AUndefined], Hom a [ANull],
-          Hom a [AString], Hom a [ANum], Hom a [ABool]) => Match a where
+instance Match ABool where
     match proxy as lens p@APrim{..} = flip map as $ \field ->
         let tester = coerce proxy p `meet` ((lens .~ field) bot)
         in  if tester == bot
                 then Nothing
                 else (Just (APrim (_aundefined `meet'` field)
                                   (_anull `meet'` field)
-                                  (_abool `meet'` field)
+                                  field
                                   (_anum `meet'` field)
                                   (_astring `meet'` field)))
 
@@ -149,6 +143,3 @@ instance Hom ABool [AString] where
     hom BotBool = [bot]
     hom TrueBool = [NonEmptyString]
     hom FalseBool = [EmptyString]
-
-matchBool :: APrim -> [Maybe APrim]
-matchBool = match (Proxy :: Proxy Bool) [TrueBool, FalseBool] abool

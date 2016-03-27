@@ -26,6 +26,7 @@ executable dynamic
                        Core.Abstract
                        Core.Coercion
                        APrim
+                       Primitive
                        Primitive.Bool
                        Primitive.Number
                        Primitive.Undefined

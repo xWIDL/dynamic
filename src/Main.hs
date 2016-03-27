@@ -5,8 +5,13 @@ import System.Environment
 import Interpret
 import Parser
 import APrim
+import Common
+import Primitive
 
 instance Abstract APrim where
+    matchBool prim =
+        let (t:f:_) = match (Proxy :: Proxy Bool) [TrueBool, FalseBool] abool prim
+        in  (t, f)
 
 data Option = ShowLog | NoLog deriving (Eq)
 
