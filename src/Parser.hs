@@ -9,6 +9,7 @@ import qualified Language.ECMAScript3 as ES
 import Core.Flow
 import AST
 import Common
+import JS.Type
 
 newtype L = L { unL :: Int } deriving (Eq, Ord)
 
@@ -85,6 +86,11 @@ translateExprStmt l (ES.AssignExpr _ ES.OpAssign lval e) = do
     e' <- translateExpr e
     lval' <- translateLVal lval
     return $ Assign l lval' e'
+translateExprStmt l (ES.CallExpr _ (ES.DotRef _ e id_) args) = do
+    e' <- translateExpr e
+    args' <- mapM translateExpr args
+    let name = idToName id_
+    return $ InvokeStmt l e' name args'
 translateExprStmt _ other = Left $ "Can't translate " ++ show other
 
 translateLVal :: Show a => ES.LValue a -> Either String (LVal a)

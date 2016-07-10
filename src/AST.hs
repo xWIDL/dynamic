@@ -1,12 +1,12 @@
 -- AST: A subset of JavaScript
 
-{-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable,
-             LambdaCase #-}
+{-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable, LambdaCase #-}
 
 module AST where
 
 import Core.Flow
 import Common
+import JS.Type
 
 import Data.Set hiding (foldr, map)
 import qualified Data.Set as S
@@ -25,6 +25,7 @@ data Stmt a = VarDecl a Name (Maybe (Expr a))
             | Seq (Stmt a) (Stmt a)
             | TryStmt a (Stmt a) a (Maybe (a, Name, Stmt a))
             | ThrowStmt a (Expr a)
+            | InvokeStmt a (Expr a) Name [Expr a]
             deriving (Eq, Functor, Foldable, Traversable)
 
 data Expr a = PrimLit Prim
@@ -35,8 +36,6 @@ data Expr a = PrimLit Prim
             | CallExpr (Expr a) [Expr a]
             | Closure a [Name] (Stmt a)
             deriving (Eq, Functor, Foldable, Traversable)
-
-data Prim = PrimNum Double | PrimBool Bool | PrimStr String | PrimNull | PrimUndefined deriving (Eq)
 
 data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Eq)
 
@@ -68,7 +67,7 @@ instance Show a => Show (Stmt a) where
         "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} " ++ show exit ++ " catch " ++
         show lc ++ " (" ++ show e ++ ") {\n" ++ indent (show sc) ++ "}"
     show (ThrowStmt l e) = "throw " ++ show l ++ " " ++ show e ++ ";"
-
+    show (InvokeStmt l e n args) = show l ++ "(" ++ show e ++ ")." ++ show n ++ "(" ++ sepByComma (map show args) ++ ")"
 
 instance Show a => Show (Expr a) where
     show (PrimLit prim) = show prim
@@ -80,13 +79,6 @@ instance Show a => Show (Expr a) where
     show (InfixExpr e1 op e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
     show (CallExpr e args) = "(" ++ show e ++ ")(" ++ sepByComma (map show args) ++ ")"
     show (Closure a args body) = "function " ++ show a ++ " (" ++ sepByComma (map show args) ++ ") {\n" ++ indent (show body) ++ "}"
-
-instance Show Prim where
-    show (PrimNum d)  = show d
-    show (PrimBool b) = if b then "true" else "false"
-    show (PrimStr s)  = show s
-    show PrimNull     = "null"
-    show PrimUndefined = "undefined"
 
 instance Show InfixOp where
     show OPlus = "+"
@@ -116,6 +108,7 @@ instance Label a => Flow Stmt a where
     initLabel (Seq s _)             = initLabel s
     initLabel (TryStmt l _ _ _)     = l
     initLabel (ThrowStmt l _)       = l
+    initLabel (InvokeStmt l _ _ _)  = l
 
     finalLabels (VarDecl l _ _)     = singleton l
     finalLabels (Assign l _ _)      = singleton l
@@ -129,6 +122,7 @@ instance Label a => Flow Stmt a where
     finalLabels (TryStmt _ s _ Nothing) = finalLabels s
     finalLabels (TryStmt _ _ exit (Just (_, _, sc))) = singleton exit `union` finalLabels sc
     finalLabels (ThrowStmt l _)     = singleton l
+    finalLabels (InvokeStmt l _ _ _) = singleton l
 
     flow (If l _ s1 s2) = fromList [Edge (l, initLabel s1), Edge (l, initLabel s2)] `union`
                           flow s1 `union` flow s2
@@ -172,3 +166,4 @@ labelsOf s = case s of
     TryStmt l s' _ (Just (lc, _, sc))
                     -> M.singleton l s `M.union` labelsOf s' `M.union` labelsOf sc
     ThrowStmt l _   -> M.singleton l s
+    InvokeStmt l _ _ _ -> M.singleton l s

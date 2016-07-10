@@ -8,33 +8,45 @@ import Core.Flow
 import Model
 import Common
 import Core.Abstract
+import JS.Platform
+import JS.Type
 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
+import Control.Monad.IO.Class (liftIO)
+
 
 class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p) => Abstract p where
     matchBool :: p -> (Maybe p, Maybe p)
 
-type InterpretState label p = M.Map (label, ScopeChain label, CallString label) (Env label p)
+data InterpretState label p = InterpretState {
+    _envMap   :: M.Map (label, ScopeChain label, CallString label) (Env label p),
+    _platPort :: PlatPort
+}
+
 type WorkList label = [Edge label]
 
-type Interpret label p = StateT (InterpretState label p) (ExceptT String (Writer String))
+type Interpret label p = StateT (InterpretState label p) (ExceptT String (WriterT String IO))
 
-interpret :: (Label a, Abstract p) => a -> Stmt a->
-            (Either String (Maybe (Value a p, M.Map Ref (Object a p), Ref), InterpretState a p)
-            , String)
-interpret start prog =
+interpret :: (Label a, Abstract p, Hom p Prim) => a -> Stmt a -> IO
+             (Either String (Maybe (Value a p, M.Map Ref (Object a p), Ref), InterpretState a p)
+             , String)
+interpret start prog = do
     let flows = flow prog
-        labelDict = labelsOf prog
-        startTask = Edge (start, initLabel prog)
-        proc = process labelDict flows TopLevel [] ([startTask]) -- : S.toList flows)
-        (ret, logging) = runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
-    in  runWriter (runExceptT (runStateT proc (M.singleton (start, TopLevel, []) initEnv)))
+    let labelDict = labelsOf prog
+    let startTask = Edge (start, initLabel prog)
+    let proc = process labelDict flows TopLevel [] ([startTask]) -- : S.toList flows)
+    startSession $ \port -> do
+        let initState = InterpretState {
+            _envMap = M.singleton (start, TopLevel, []) initEnv,
+            _platPort = port
+        }
+        runWriterT (runExceptT (runStateT proc initState))
 
-process :: (Label label, Abstract p) =>
+process :: (Label label, Abstract p, Hom p Prim) =>
            M.Map label (Stmt label) -> S.Set (Edge label) ->
            ScopeChain label -> CallString label -> WorkList label ->
            Interpret label p (Maybe ((Value label p), M.Map Ref (Object label p), Ref))
@@ -42,7 +54,7 @@ process labelDict flows = process'
     where
         process' _ _ [] = return Nothing
         process' chain cstr wl@(work : wl') = do
-            oldState <- get
+            oldState <- _envMap <$> get
             tell $ "========== State ==========\n"
             tell $ "|| chain: " ++ show chain ++ "\n"
             tell $ "|| cstr: " ++ show cstr ++ "\n"
@@ -85,7 +97,7 @@ process labelDict flows = process'
                         Nothing -> return Nothing
                         Just e  -> do
                             retVal <- interpret l e
-                            env <- get >>= lookupM (l2, chain, cstr)
+                            env <- (_envMap <$> get) >>= lookupM (l2, chain, cstr)
                             partialStore <- reachableFrom retVal
                             return $ Just (retVal, partialStore, _refCount env)
 
@@ -127,9 +139,20 @@ process labelDict flows = process'
                                             Just e  -> e -- FIXME: Exception sensitivity?
                         v <- interpret l e
 
-                        modify $ M.insert (catcher, csc, ccs)
+                        modify (\s -> s { _envMap = M.insert (catcher, csc, ccs)
                                           (catcherEnv { _bindings = M.insert caught v (_bindings catcherEnv) })
+                                          (_envMap s) })
                         cont oldState (Just [Edge (l, catcher)])
+                    -- XXX: don't really fit in the style, but let's make a quick hack though
+                    InvokeStmt l e f args -> interpret l e >>= \case
+                        VPlat name -> do
+                            port <- _platPort <$> get
+                            vals <- mapM (interpret l) args
+                            reply <- liftIO $ invoke port (LInterface name) f (map valToPlatExpr vals)
+                            case reply of
+                                Sat -> cont oldState Nothing
+                                Unsat -> throwError "Unsat"
+                        other -> throwError' $ "can't call on " ++ show other
 
                     other -> throwError' $ "can't interpret " ++ show other
             where
@@ -142,7 +165,7 @@ process labelDict flows = process'
 
                 -- Continue without unwinding the stack
                 cont oldState mSucc = do
-                    newState <- get
+                    newState <- _envMap <$> get
                     if oldState == newState
                         then process' chain cstr wl'
                         else case mSucc of
@@ -160,15 +183,14 @@ process labelDict flows = process'
                 updateEnvWith f = do
                     e <- lookupState l2 chain cstr
                     (e', a) <- f e --- NOTE: Monadic f
-                    modify $ M.insert (l2, chain, cstr) e'
+                    modify (\s -> s { _envMap = M.insert (l2, chain, cstr) e' (_envMap s)})
                     return a
 
                 updateEnvWith_ f = updateEnvWith $ \e -> return (f e, ())
 
                 addBinding l chain cstr x v = do
                     e <- lookupState l chain cstr
-                    modify $ M.insert (l, chain, cstr)
-                                      (e { _bindings = M.insert x v (_bindings e) })
+                    modify (\s -> s { _envMap = M.insert (l, chain, cstr) (e { _bindings = M.insert x v (_bindings e) }) (_envMap s)})
 
                 -- Local and Enclosed Lookup
                 lookupEnvWith err sel = lookupEnvWith' l2 chain cstr
@@ -181,6 +203,7 @@ process labelDict flows = process'
                                     (Enclosed cs _ father, _ : cstr') -> lookupEnvWith' cs father cstr'
                                     _ -> throwError' err
 
+                valueOf foo@(Name "Foo") = return $ VPlat foo
                 valueOf x = (\(a, _, _) -> a) <$> lookupEnvWith ("can't find value of binding: " ++ show x)
                                                                 (M.lookup x . _bindings)
                 loadObj x = (\(a, _, _) -> a) <$> lookupEnvWith ("can't find object of ref: " ++ show x)
@@ -225,19 +248,23 @@ process labelDict flows = process'
 
                                 let newFlows = flow stmt
                                 let newLabelDict = labelsOf stmt
-                                env <- get >>= lookupM (l1, chain, cstr)
-                                modify $ M.insert (start, boundChain, l : boundCStr)
-                                                  (Env bindings' (_store env) (_refCount env) (_catcher env))
+                                env <- (_envMap <$> get) >>= lookupM (l1, chain, cstr)
+                                modify (\s ->
+                                            s { _envMap = M.insert (start, boundChain, l : boundCStr)
+                                                                   (Env bindings' (_store env) (_refCount env) (_catcher env))
+                                                                   (_envMap s) })
                                                   -- FIXME: Should we just use `env` here?
                                 mVal <- process newLabelDict newFlows boundChain (l : boundCStr)
                                                 [Edge (start, initLabel stmt)]
                                 case mVal of
                                     Just (val, store', refCount') -> do
-                                        modify $ M.insert (l2, chain, cstr)
+                                        modify (\s ->
+                                            s { _envMap = M.insert (l2, chain, cstr)
                                                  (Env (_bindings env)
                                                       (store' `unionStore` (_store env))
                                                       (refCount' `unionRef` (_refCount env))
                                                       (_catcher env))
+                                                 (_envMap s)})
                                         return val
                                     Nothing  -> return $ VPrim (hom PrimUndefined)
                             other -> throwError' $ show other ++ " is not closure"
@@ -249,14 +276,19 @@ process labelDict flows = process'
 
 lookupState :: Label l => l -> ScopeChain l -> CallString l -> Interpret l p (Env l p)
 lookupState l chain cstr = do
-    s <- get
+    s <- _envMap <$> get
     case M.lookup (l, chain, cstr) s of
         Nothing -> return initEnv
         Just e  -> return e
 
-showState :: (Show l, Abstract p) => InterpretState l p -> String
+showState :: (Show l, Abstract p) => M.Map (l, ScopeChain l, CallString l) (Env l p) -> String
 showState = unlines . map (\((l, sc, cstr), env) -> "--------- Env " ++ show l ++ "----------\n" ++
                                                     "Scope Chain: " ++ show sc ++ "\n" ++
                                                     "Call String: "  ++ show cstr ++ "\n" ++
                                                     "Environment: \n" ++ show env ++ "\n"
                           ) . M.toList
+
+
+valToPlatExpr :: Hom p Prim => Value a p -> PlatExpr
+valToPlatExpr (VPrim p)    = PVal (PVPrim (hom p :: Prim))
+valToPlatExpr (VPlatRef r) = PVal (PVRef r)

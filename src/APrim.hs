@@ -7,6 +7,7 @@ module APrim where
 import Core.Abstract
 import Core.Coercion
 import AST
+import JS.Type
 import Common
 import Primitive
 import Control.Lens
@@ -92,6 +93,18 @@ instance Hom Prim APrim where
     hom (PrimBool n)  = abool .~ (hom n) $ bot
     hom PrimNull      = anull .~ (hom PrimNull) $ bot
     hom PrimUndefined = aundefined .~ (hom PrimUndefined) $ bot
+
+instance Hom APrim Prim where
+    hom (APrim _ p2 p3 p4 p5)
+      | p3 == bot && p4 == bot && p5 == bot = hom p2
+      | p4 == bot && p5 == bot && p2 == bot = hom p3
+      | p2 == bot && p3 == bot && p5 == bot = hom p4
+      | p2 == bot && p3 == bot && p4 == bot = hom p5
+      | otherwise = PrimNull
+    -- hom (PrimStr n)   = astring .~ (hom n) $ bot
+    -- hom (PrimBool n)  = abool .~ (hom n) $ bot
+    -- hom PrimNull      = anull .~ (hom PrimNull) $ bot
+    -- hom PrimUndefined = aundefined .~ (hom PrimUndefined) $ bot
 
 -- Reduction Framework
 instance Reduce APrim InfixOp where

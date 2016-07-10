@@ -2,8 +2,8 @@
 {-# LANGUAGE RankNTypes #-}
 module Core.Flow where
 
+import JS.Type
 import Data.Set (Set)
-import Common
 
 data Edge a = Edge (a, a)
             | EnterTry (a, a) (a, Name)

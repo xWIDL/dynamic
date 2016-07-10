@@ -6,6 +6,8 @@ module Model where
 import AST
 import Core.Abstract
 import Common
+import JS.Platform
+import JS.Type
 
 import qualified Data.Map as M
 import Control.Lens
@@ -30,6 +32,8 @@ initRef = Ref 0
 
 data Value a p = VPrim p
                | VRef Ref
+               | VPlat Name
+               | VPlatRef PRef
                | VTop -- FIXME: Can be anything .... which is too coarse
                deriving (Show, Eq)
 
@@ -42,7 +46,7 @@ data Object a p = Object (M.Map Name (Value a p))
 -- Environment
 
 type Bindings a p = M.Map Name (Value a p)
-type Store    a p = M.Map Ref  (Object a p)
+type Store    a p = M.Map Ref  (Object a p) -- XXX: Store => Heap
 
 data Env a p = Env {
     _bindings :: Bindings a p,

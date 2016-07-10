@@ -41,6 +41,7 @@ executable dynamic
                        ScopedTypeVariables
 
   build-depends:       base >=4.9 && <4.10, containers, lens, mtl,
-                       language-ecmascript
+                       language-ecmascript, js-bridge
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -Wall

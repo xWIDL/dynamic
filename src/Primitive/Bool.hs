@@ -2,6 +2,7 @@
 module Primitive.Bool where
 
 import Core.Abstract
+import JS.Type
 import AST
 
 data ABool = FalseBool | TrueBool | TopBool | BotBool deriving (Show, Eq)
@@ -10,7 +11,6 @@ instance Lattice ABool where
     top = TopBool
     bot = BotBool
 
-
 instance Hom Bool ABool where
     hom True = TrueBool
     hom False = FalseBool
@@ -18,6 +18,9 @@ instance Hom Bool ABool where
 instance Hom ABool Bool where
     hom TrueBool  = True
     hom FalseBool = False
+
+instance Hom ABool Prim where
+    hom b = PrimBool (hom b)
 
 instance Reduce ABool InfixOp where
     reduce _ _ _ = top -- FIXME

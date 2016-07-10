@@ -2,6 +2,7 @@
 module Primitive.Undefined where
 
 import Core.Abstract
+import JS.Type
 import AST
 
 data AUndefined = Undefined | UndefinedBot deriving (Show, Eq)

@@ -2,6 +2,7 @@
 module Primitive.Null where
 
 import Core.Abstract
+import JS.Type
 import AST
 
 data ANull = Null | NullBot deriving (Show, Eq)

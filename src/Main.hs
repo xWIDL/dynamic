@@ -28,12 +28,13 @@ main' file opt = do
     case parseJS src of
         Right prog -> do
             putStrLn $ "Program:\n" ++ show prog ++ "\n"
-            case interpret (L (-1)) prog of
-                (Right (_, s), logging)  -> do
+            ret <- interpret (L (-1)) prog
+            case ret of
+                (Right (_, s), logging) -> do
                     if opt == ShowLog
                         then putStrLn $ "\n************** log **************\n\n" ++ logging ++
-                                        showState (s :: InterpretState L APrim)
-                        else putStrLn $ showState (s :: InterpretState L APrim)
+                                        (showState . _envMap) (s :: InterpretState L APrim)
+                        else putStrLn $ (showState . _envMap) (s :: InterpretState L APrim)
                 (Left err, logging) ->
                     putStrLn $ "Failed: " ++ err ++ ", log:\n" ++ logging
         Left err -> putStrLn err
