@@ -6,7 +6,7 @@ module APrim where
 
 import Core.Abstract
 import Core.Coercion
-import AST
+import JS.AST
 import JS.Type
 import Common
 import Primitive
@@ -88,11 +88,11 @@ instance Lattice APrim where
     bot = APrim bot bot bot bot bot
 
 instance Hom Prim APrim where
-    hom (PrimNum n)   = anum .~ (hom n) $ bot
-    hom (PrimStr n)   = astring .~ (hom n) $ bot
-    hom (PrimBool n)  = abool .~ (hom n) $ bot
-    hom PrimNull      = anull .~ (hom PrimNull) $ bot
-    hom PrimUndefined = aundefined .~ (hom PrimUndefined) $ bot
+    hom (PDouble n) = anum .~ (hom n) $ bot
+    hom (PString n) = astring .~ (hom n) $ bot
+    hom (PBool n)   = abool .~ (hom n) $ bot
+    hom PNull       = anull .~ (hom PNull) $ bot
+    hom PUndefined  = aundefined .~ (hom PUndefined) $ bot
 
 instance Hom APrim Prim where
     hom (APrim _ p2 p3 p4 p5)
@@ -100,10 +100,10 @@ instance Hom APrim Prim where
       | p4 == bot && p5 == bot && p2 == bot = hom p3
       | p2 == bot && p3 == bot && p5 == bot = hom p4
       | p2 == bot && p3 == bot && p4 == bot = hom p5
-      | otherwise = PrimNull
+      | otherwise = PNull
     -- hom (PrimStr n)   = astring .~ (hom n) $ bot
     -- hom (PrimBool n)  = abool .~ (hom n) $ bot
-    -- hom PrimNull      = anull .~ (hom PrimNull) $ bot
+    -- hom PNull      = anull .~ (hom PNull) $ bot
     -- hom PrimUndefined = aundefined .~ (hom PrimUndefined) $ bot
 
 -- Reduction Framework

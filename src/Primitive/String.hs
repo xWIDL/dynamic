@@ -3,7 +3,7 @@ module Primitive.String where
 
 import Core.Abstract
 import JS.Type
-import AST
+import JS.AST
 
 data AString = EmptyString | NonEmptyString | TopString | BotString deriving (Show, Eq)
 
@@ -20,7 +20,7 @@ instance Hom AString String where
     hom NonEmptyString = "s"
 
 instance Hom AString Prim where
-    hom s = PrimStr (hom s)
+    hom s = PString (hom s)
 
 instance Reduce AString InfixOp where
     reduce OPlus EmptyString EmptyString = EmptyString

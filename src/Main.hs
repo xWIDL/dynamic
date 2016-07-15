@@ -3,7 +3,7 @@ module Main where
 import System.Environment
 
 import Interpret
-import Parser
+import JS.Parser
 import APrim
 import Common
 import Primitive

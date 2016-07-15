@@ -3,7 +3,7 @@ module Primitive.Undefined where
 
 import Core.Abstract
 import JS.Type
-import AST
+import JS.AST
 
 data AUndefined = Undefined | UndefinedBot deriving (Show, Eq)
 
@@ -12,7 +12,7 @@ instance Lattice AUndefined where
     bot = UndefinedBot
 
 instance Hom Prim AUndefined where
-    hom PrimUndefined = Undefined
+    hom PUndefined = Undefined
 
 instance Reduce AUndefined InfixOp where
     reduce _ _ _ = top

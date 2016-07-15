@@ -1,12 +1,10 @@
 -- Model: Execution Model
 
 {-# LANGUAGE TemplateHaskell #-}
-module Model where
+module JS.Model where
 
-import AST
 import Core.Abstract
-import Common
-import JS.Platform
+import JS.AST
 import JS.Type
 
 import qualified Data.Map as M
@@ -27,13 +25,17 @@ data ScopeChain label = TopLevel
 -- Value Model
 
 newtype Ref = Ref Int deriving (Show, Eq, Ord)
+
+incrRef :: Ref -> Ref
 incrRef (Ref i) = Ref (i + 1)
+
+initRef :: Ref
 initRef = Ref 0
 
 data Value a p = VPrim p
                | VRef Ref
                | VPlat Name
-               | VPlatRef PRef
+               | VPlatRef JRef
                | VTop -- FIXME: Can be anything .... which is too coarse
                deriving (Show, Eq)
 
@@ -55,7 +57,7 @@ data Env a p = Env {
     _catcher  :: Maybe (a, Name)
 } deriving (Eq)
 
-instance (Show a, Lattice p, Show p) => Show (Env a p) where
+instance (Show a, Show p) => Show (Env a p) where
     show env = "refCount: " ++ show (_refCount env) ++ "\n" ++
                "catcher: " ++ show (_catcher env) ++ "\n" ++
                "bindings:\n" ++ concatMap (\(Name x, v) -> x ++ "\t" ++ show v ++ "\n") (M.toList (_bindings env)) ++
@@ -87,13 +89,13 @@ unionEnv :: (Eq a, Lattice p) => Env a p -> Env a p -> Env a p
 unionEnv (Env b1 s1 rc1 c) (Env b2 s2 rc2 _) =
     Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2) c
 
-unionBindings :: (Eq a, Lattice p) => Bindings a p -> Bindings a p -> Bindings a p
+unionBindings :: Lattice p => Bindings a p -> Bindings a p -> Bindings a p
 unionBindings = M.unionWith unionValue
 
 unionStore :: (Eq a, Eq p) => Store a p -> Store a p -> Store a p
 unionStore = M.unionWith unionObject
 
-unionValue :: (Eq a, Lattice p) => Value a p -> Value a p -> Value a p
+unionValue :: Lattice p => Value a p -> Value a p -> Value a p
 unionValue (VPrim p1) (VPrim p2) = VPrim $ join p1 p2
 unionValue v1 v2 = if v1 == v2 then v1 else VTop -- FIXME: Wow, Magic!
 
@@ -101,4 +103,4 @@ unionObject :: (Eq a, Eq p) => Object a p -> Object a p -> Object a p
 unionObject o1 o2 = if o1 == o2 then o1 else OTop -- FIXME: Wow, So Magic!
 
 unionRef :: Ref -> Ref -> Ref
-unionRef (Ref i1) (Ref i2) = Ref i1 -- FIXME: Seriously?
+unionRef (Ref i1) (Ref _i2) = Ref i1 -- FIXME: Seriously?

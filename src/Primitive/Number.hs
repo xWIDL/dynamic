@@ -3,7 +3,7 @@ module Primitive.Number where
 
 import Core.Abstract
 import JS.Type
-import AST
+import JS.AST
 
 data ANum = NegNum | ZeroNum | PosNum | TopNum | BotNum deriving (Show, Eq)
 
@@ -22,7 +22,7 @@ instance Hom ANum Double where
     hom PosNum  = 1.0
 
 instance Hom ANum Prim where
-    hom n = PrimNum (hom n)
+    hom n = PDouble (hom n)
 
 instance Reduce ANum InfixOp where
     reduce OPlus   PosNum    PosNum  = PosNum

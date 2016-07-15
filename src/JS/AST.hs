@@ -2,10 +2,9 @@
 
 {-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable, LambdaCase #-}
 
-module AST where
+module JS.AST where
 
 import Core.Flow
-import Common
 import JS.Type
 
 import Data.Set hiding (foldr, map)
@@ -118,7 +117,7 @@ instance Label a => Flow Stmt a where
     finalLabels (ContStmt l)        = singleton l
     finalLabels (Skip l)            = singleton l
     finalLabels (ReturnStmt l _)    = singleton l
-    finalLabels (Seq s1 s2)         = finalLabels s2
+    finalLabels (Seq _s1 s2)        = finalLabels s2
     finalLabels (TryStmt _ s _ Nothing) = finalLabels s
     finalLabels (TryStmt _ _ exit (Just (_, _, sc))) = singleton exit `union` finalLabels sc
     finalLabels (ThrowStmt l _)     = singleton l
@@ -155,7 +154,7 @@ labelsOf s = case s of
     VarDecl l _ _   -> M.singleton l s
     Assign l _ _    -> M.singleton l s
     If l _ s1 s2    -> M.singleton l s `M.union` labelsOf s1 `M.union` labelsOf s2
-    While l _ s     -> M.singleton l s `M.union` labelsOf s
+    While l _ s'    -> M.singleton l s' `M.union` labelsOf s
     BreakStmt l     -> M.singleton l s
     ContStmt l      -> M.singleton l s
     Skip l          -> M.singleton l s
@@ -163,7 +162,7 @@ labelsOf s = case s of
     Seq s1 s2       -> labelsOf s1 `M.union` labelsOf s2
     TryStmt l s' _ Nothing
                     -> M.singleton l s `M.union` labelsOf s'
-    TryStmt l s' _ (Just (lc, _, sc))
+    TryStmt l s' _ (Just (_lc, _, sc))
                     -> M.singleton l s `M.union` labelsOf s' `M.union` labelsOf sc
     ThrowStmt l _   -> M.singleton l s
     InvokeStmt l _ _ _ -> M.singleton l s

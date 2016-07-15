@@ -3,7 +3,7 @@ module Primitive.Null where
 
 import Core.Abstract
 import JS.Type
-import AST
+import JS.AST
 
 data ANull = Null | NullBot deriving (Show, Eq)
 
@@ -12,10 +12,10 @@ instance Lattice ANull where
     bot = NullBot
 
 instance Hom Prim ANull where
-    hom PrimNull = Null
+    hom PNull = Null
 
 instance Hom ANull Prim where
-    hom Null = PrimNull
+    hom Null = PNull
 
 instance Reduce ANull InfixOp where
     reduce _ _ _ = top

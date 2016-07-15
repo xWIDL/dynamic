@@ -1,14 +1,13 @@
 -- Parser: Parse a JavaScript subset by partial translation
 
 {-# LANGUAGE LambdaCase #-}
-module Parser where
+module JS.Parser where
 
 import Language.ECMAScript3.Syntax.Annotations
 import qualified Language.ECMAScript3 as ES
 
 import Core.Flow
-import AST
-import Common
+import JS.AST
 import JS.Type
 
 newtype L = L { unL :: Int } deriving (Eq, Ord)
@@ -35,7 +34,7 @@ translateStmts :: Show a => [ES.Statement a] -> Either String (Stmt a)
 translateStmts stmts = foldr1 Seq <$> mapM translateStmt stmts
 
 translateStmt :: Show a => ES.Statement a -> Either String (Stmt a)
-translateStmt (ES.BlockStmt a stmts) = translateStmts stmts
+translateStmt (ES.BlockStmt _a stmts) = translateStmts stmts
 translateStmt (ES.ExprStmt a e) = translateExprStmt a e
 
 translateStmt (ES.IfStmt a e1 s1 s2) = do
@@ -56,7 +55,7 @@ translateStmt (ES.ReturnStmt a me) =
             e' <- translateExpr e
             return (ReturnStmt a (Just e'))
 
-translateStmt (ES.VarDeclStmt a decls) = foldr1 Seq <$> mapM translateVarDecl decls
+translateStmt (ES.VarDeclStmt _a decls) = foldr1 Seq <$> mapM translateVarDecl decls
 
 translateStmt (ES.FunctionStmt a f args ss) = do
     s' <- translateStmts ss
@@ -98,14 +97,15 @@ translateLVal (ES.LVar _ s) = return $ LVar (Name s)
 translateLVal (ES.LDot _ e s) = do
     e' <- translateExpr e
     return $ LProp e' (Name s)
+translateLVal other = Left $ "Can't translate " ++ show other
 
 translateExpr :: Show a => ES.Expression a -> Either String (Expr a)
 translateExpr = \case
-    ES.NumLit _ x    -> return $ PrimLit (PrimNum x)
-    ES.IntLit _ x    -> return $ PrimLit (PrimNum (fromIntegral x))
-    ES.BoolLit _ x   -> return $ PrimLit (PrimBool x)
-    ES.StringLit _ x -> return $ PrimLit (PrimStr x)
-    ES.NullLit _     -> return $ PrimLit PrimNull
+    ES.NumLit _ x    -> return $ PrimLit (PDouble x)
+    ES.IntLit _ x    -> return $ PrimLit (PInt (fromIntegral x))
+    ES.BoolLit _ x   -> return $ PrimLit (PBool x)
+    ES.StringLit _ x -> return $ PrimLit (PString x)
+    ES.NullLit _     -> return $ PrimLit PNull
     ES.ObjectLit _ m -> do
         props' <- mapM (translateProp . fst) m
         es' <- mapM (translateExpr . snd) m

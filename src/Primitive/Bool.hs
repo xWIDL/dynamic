@@ -3,7 +3,7 @@ module Primitive.Bool where
 
 import Core.Abstract
 import JS.Type
-import AST
+import JS.AST
 
 data ABool = FalseBool | TrueBool | TopBool | BotBool deriving (Show, Eq)
 
@@ -20,7 +20,7 @@ instance Hom ABool Bool where
     hom FalseBool = False
 
 instance Hom ABool Prim where
-    hom b = PrimBool (hom b)
+    hom b = PBool (hom b)
 
 instance Reduce ABool InfixOp where
     reduce _ _ _ = top -- FIXME

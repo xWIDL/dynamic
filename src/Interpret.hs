@@ -3,9 +3,9 @@
 {-# LANGUAGE TupleSections, LambdaCase #-}
 module Interpret where
 
-import AST
+import JS.AST
 import Core.Flow
-import Model
+import JS.Model
 import Common
 import Core.Abstract
 import JS.Platform
@@ -75,7 +75,7 @@ process labelDict flows = process'
                 Just stmt -> case stmt of
                     VarDecl l x mExpr -> do
                         val <- case mExpr of
-                                Nothing -> return $ VPrim (hom PrimNull)
+                                Nothing -> return $ VPrim (hom PNull)
                                 Just e  -> interpret l e
                         updateEnvWith_ (bindValue x val) >> cont oldState Nothing
                     Assign l (LVar x) expr -> interpret l expr >>= updateEnvWith_ . bindValue x >> cont oldState Nothing
@@ -236,7 +236,7 @@ process labelDict flows = process'
                     case (v1, v2) of
                         (VPrim p1, VPrim p2) ->
                             return $ VPrim (reduce op p1 p2)
-                        _ -> return $ VPrim (hom PrimUndefined)
+                        _ -> return $ VPrim (hom PUndefined)
 
                 interpret l (CallExpr e args) =
                     interpret l e >>= \case
@@ -266,7 +266,7 @@ process labelDict flows = process'
                                                       (_catcher env))
                                                  (_envMap s)})
                                         return val
-                                    Nothing  -> return $ VPrim (hom PrimUndefined)
+                                    Nothing  -> return $ VPrim (hom PUndefined)
                             other -> throwError' $ show other ++ " is not closure"
                         other -> throwError' $ show other ++ " is not closure"
 
@@ -289,6 +289,6 @@ showState = unlines . map (\((l, sc, cstr), env) -> "--------- Env " ++ show l +
                           ) . M.toList
 
 
-valToPlatExpr :: Hom p Prim => Value a p -> PlatExpr
-valToPlatExpr (VPrim p)    = PVal (PVPrim (hom p :: Prim))
-valToPlatExpr (VPlatRef r) = PVal (PVRef r)
+valToPlatExpr :: Hom p Prim => Value a p -> JsExpr
+valToPlatExpr (VPrim p)    = JVal (JVPrim (hom p :: Prim))
+valToPlatExpr (VPlatRef r) = JVal (JVRef r)
