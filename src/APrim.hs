@@ -1,8 +1,11 @@
--- Abstract Primitive
+{-|
+Module      : APrim
+Description : Abstract primitive type
+-}
 
-{-# LANGUAGE TemplateHaskell, PolyKinds, AllowAmbiguousTypes,
-             UndecidableInstances, RecordWildCards #-}
-module APrim (APrim, abool, Match(..)) where
+{-# LANGUAGE TemplateHaskell, PolyKinds, AllowAmbiguousTypes, UndecidableInstances, RecordWildCards #-}
+
+module APrim (APrim, selectABool, Match(..)) where
 
 import Core.Abstract
 import Core.Coercion
@@ -12,6 +15,7 @@ import Common
 import Primitive
 import Control.Lens (makeLenses, Lens', (.~))
 
+-- | Abstract primitive types as a product of sub-types
 data APrim = APrim {
     _aundefined :: AUndefined,
     _anull :: ANull,
@@ -21,6 +25,10 @@ data APrim = APrim {
 } deriving (Show, Eq)
 
 $(makeLenses ''APrim)
+
+-- | Select boolean part of APrim
+selectABool :: Lens' APrim ABool
+selectABool = abool
 
 -- Coerce to String
 
@@ -119,9 +127,11 @@ instance Reduce APrim InfixOp where
         in  (anum .~ n) bot `join` (astring .~ s) bot
 
 
--- Path Sentivitity Framework
+-- | Path Sentivitity Framework
 class Match a where
-    match :: Coerce APrim aconc => Proxy aconc -> [a] -> Lens' APrim a -> APrim -> [Maybe APrim]
+    -- | Match the tag-type field of an abstract primitive according to a
+    -- given list of sub-type abstract values, and output a corresponding matched list
+    match :: Coerce APrim tag => Proxy tag -> [a] -> Lens' APrim a -> APrim -> [Maybe APrim]
 
 instance Match ABool where
     match proxy as lens p@APrim{..} = flip map as $ \field ->

@@ -1,4 +1,7 @@
--- Abstract Bool
+{-|
+Module      : Primitive.Bool
+Description : Abstract primitive boolean type
+-}
 module Primitive.Bool (ABool(..)) where
 
 import Core.Abstract

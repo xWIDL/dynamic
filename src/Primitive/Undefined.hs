@@ -1,4 +1,8 @@
--- Abstract Undefined
+{-|
+Module      : Primitive.Undefined
+Description : Abstract primitive undefined type
+-}
+
 module Primitive.Undefined (AUndefined(..)) where
 
 import Core.Abstract

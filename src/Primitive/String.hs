@@ -1,4 +1,8 @@
--- Abstract String
+{-|
+Module      : Primitive.String
+Description : Abstract primitive string type
+-}
+
 module Primitive.String (AString(..)) where
 
 import Core.Abstract

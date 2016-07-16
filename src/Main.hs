@@ -1,17 +1,20 @@
-module Main where
+{-|
+Module      : Main
+-}
+module Main (main) where
 
 import System.Environment
 
 import Dynamic.Interpret (interpret, InterpretResult)
 import Dynamic.Defs (Abstract(..), InterpretState(..), EnvMap, printEnvMap)
 import JS.Parser
-import APrim (APrim, abool, Match(..))
+import APrim (APrim, selectABool, Match(..))
 import Common
 import Primitive
 
 instance Abstract APrim where
     matchBool prim =
-        let (t:f:_) = match (Proxy :: Proxy Bool) [TrueBool, FalseBool] abool prim
+        let (t:f:_) = match (Proxy :: Proxy Bool) [TrueBool, FalseBool] selectABool prim
         in  (t, f)
 
 data Option = ShowLog | NoLog deriving (Eq)
@@ -19,6 +22,7 @@ data Option = ShowLog | NoLog deriving (Eq)
 printUsage :: IO ()
 printUsage = putStrLn "usage: dynamic -[nolog/showlog] /PATH/TO/X.js"
 
+-- | main
 main :: IO ()
 main = do
     args <- getArgs
@@ -38,9 +42,9 @@ main' opt file = do
             putStrLn $ "Program:\n" ++ show prog ++ "\n"
             ret <- interpret (L (-1)) prog :: IO (InterpretResult L APrim)
             case ret of
-                (Right (_, s), logging) -> do
+                (Right (_, s), _) -> do
                     if opt == ShowLog
-                        then putStrLn $ "\n************** log **************\n\n" ++ -- logging-- ++
+                        then putStrLn $ "\n************** log **************\n\n" ++
                                         (printEnvMap (_envMap s :: EnvMap L APrim))
                         else putStrLn $ (printEnvMap (_envMap s :: EnvMap L APrim))
                 (Left err, logging) ->

@@ -1,4 +1,7 @@
--- AST: A subset of JavaScript
+{-|
+Module      : JS.AST
+Description : A subset of JavaScript
+-}
 
 {-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable, LambdaCase #-}
 
@@ -14,38 +17,45 @@ import Data.Set hiding (foldr, map)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
+-- | JS program
 type Program a = Stmt a
 
-data Stmt a = VarDecl a Name (Maybe (Expr a))
-            | Assign a (LVal a) (Expr a)
-            | If a (Expr a) (Stmt a) (Stmt a)
-            | While a (Expr a) (Stmt a)
-            | BreakStmt a
-            | ContStmt a
-            | Skip a
-            | ReturnStmt a (Maybe (Expr a))
-            | Seq (Stmt a) (Stmt a)
-            | TryStmt a (Stmt a) a (Maybe (a, Name, Stmt a))
-            | ThrowStmt a (Expr a)
-            | InvokeStmt a (Expr a) Name [Expr a]
+-- | JS statement
+data Stmt a = VarDecl a Name (Maybe (Expr a))   -- ^ > var <x> [= <expr>]
+            | Assign a (LVal a) (Expr a)        -- ^ > <x> = <expr>
+            | If a (Expr a) (Stmt a) (Stmt a)   -- ^ > if (<expr>) { <stmt> } else { <stmt> }
+            | While a (Expr a) (Stmt a)         -- ^ > while (<expr>) { <stmt> }
+            | BreakStmt a                       -- ^ > break
+            | ContStmt a                        -- ^ > continue
+            | Skip a                            -- ^ Do nothing
+            | ReturnStmt a (Maybe (Expr a))     -- ^ > return [<expr>]
+            | Seq (Stmt a) (Stmt a)             -- ^ > <stmt> ; <stmt>
+            | TryStmt a (Stmt a) a (Maybe (a, Name, Stmt a)) -- ^ try  { <stmt> } [catch (<x>) { <stmt> } ]
+            | ThrowStmt a (Expr a) -- ^ > throw <expr>
+            | InvokeStmt a (Expr a) Name [Expr a] -- > ^ (<expr>).<f>(<expr>*)
             deriving (Eq, Functor, Foldable, Traversable)
 
-data Expr a = PrimLit Prim
-            | ObjExpr [(Name, Expr a)]
-            | VarExpr Name
-            | GetExpr (Expr a) Name
-            | InfixExpr (Expr a) InfixOp (Expr a)
-            | CallExpr (Expr a) [Expr a]
-            | Closure a [Name] (Stmt a)
+-- | JS expression
+data Expr a = PrimLit Prim -- ^ primitive literal
+            | ObjExpr [(Name, Expr a)] -- ^ object expression
+            | VarExpr Name -- ^ variable
+            | GetExpr (Expr a) Name -- ^ > (<expr>).<x>
+            | InfixExpr (Expr a) InfixOp (Expr a) -- ^ > <expr> <op> <expr>
+            | CallExpr (Expr a) [Expr a] -- ^ @ (<expr>)(<expr>*) @, the first might be evaluated to a closure
+            | Closure a [Name] (Stmt a) -- ^ > function (<x>*) { <stmt> }
             deriving (Eq, Functor, Foldable, Traversable)
 
+-- | Infix binary operator
 data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Eq)
 
-data LVal a = LVar Name | LProp (Expr a) Name deriving (Eq, Functor, Foldable, Traversable)
+-- | Left-hand-side value
+data LVal a = LVar Name -- ^ variable
+            | LAttr (Expr a) Name -- ^ > (<expr>).<x>
+            deriving (Eq, Functor, Foldable, Traversable)
 
 instance Show a => Show (LVal a) where
     show (LVar x) = show x
-    show (LProp x a) = show x ++ "." ++ show a
+    show (LAttr x a) = show x ++ "." ++ show a
 
 instance Show a => Show (Stmt a) where
     show (VarDecl a x mExpr) = "var " ++ show x ++ " " ++ show a ++ mRHS
@@ -99,45 +109,45 @@ indent = unlines . map ("  " ++) . lines
 -- Flow implementation
 
 instance Label a => Flow Stmt a where
-    initLabel (VarDecl l _ _)       = l
-    initLabel (Assign l _ _)        = l
-    initLabel (If l _ _ _)          = l
-    initLabel (While l _ _)         = l
-    initLabel (BreakStmt l)         = l
-    initLabel (ContStmt l)          = l
-    initLabel (Skip l)              = l
-    initLabel (ReturnStmt l _)      = l
-    initLabel (Seq s _)             = initLabel s
-    initLabel (TryStmt l _ _ _)     = l
-    initLabel (ThrowStmt l _)       = l
-    initLabel (InvokeStmt l _ _ _)  = l
+    entryLabel (VarDecl l _ _)       = l
+    entryLabel (Assign l _ _)        = l
+    entryLabel (If l _ _ _)          = l
+    entryLabel (While l _ _)         = l
+    entryLabel (BreakStmt l)         = l
+    entryLabel (ContStmt l)          = l
+    entryLabel (Skip l)              = l
+    entryLabel (ReturnStmt l _)      = l
+    entryLabel (Seq s _)             = entryLabel s
+    entryLabel (TryStmt l _ _ _)     = l
+    entryLabel (ThrowStmt l _)       = l
+    entryLabel (InvokeStmt l _ _ _)  = l
 
-    finalLabels (VarDecl l _ _)     = singleton l
-    finalLabels (Assign l _ _)      = singleton l
-    finalLabels (If _ _ s1 s2)      = finalLabels s1 `union` finalLabels s2
-    finalLabels (While l _ s)       = singleton l `union` S.fromList (scanBreak s id)
-    finalLabels (BreakStmt l)       = singleton l
-    finalLabels (ContStmt l)        = singleton l
-    finalLabels (Skip l)            = singleton l
-    finalLabels (ReturnStmt l _)    = singleton l
-    finalLabels (Seq _s1 s2)        = finalLabels s2
-    finalLabels (TryStmt _ s _ Nothing) = finalLabels s
-    finalLabels (TryStmt _ _ exit (Just (_, _, sc))) = singleton exit `union` finalLabels sc
-    finalLabels (ThrowStmt l _)     = singleton l
-    finalLabels (InvokeStmt l _ _ _) = singleton l
+    exitLabels (VarDecl l _ _)     = singleton l
+    exitLabels (Assign l _ _)      = singleton l
+    exitLabels (If _ _ s1 s2)      = exitLabels s1 `union` exitLabels s2
+    exitLabels (While l _ s)       = singleton l `union` S.fromList (scanBreak s id)
+    exitLabels (BreakStmt l)       = singleton l
+    exitLabels (ContStmt l)        = singleton l
+    exitLabels (Skip l)            = singleton l
+    exitLabels (ReturnStmt l _)    = singleton l
+    exitLabels (Seq _s1 s2)        = exitLabels s2
+    exitLabels (TryStmt _ s _ Nothing) = exitLabels s
+    exitLabels (TryStmt _ _ exit (Just (_, _, sc))) = singleton exit `union` exitLabels sc
+    exitLabels (ThrowStmt l _)     = singleton l
+    exitLabels (InvokeStmt l _ _ _) = singleton l
 
-    flow (If l _ s1 s2) = fromList [Edge (l, initLabel s1), Edge (l, initLabel s2)] `union`
+    flow (If l _ s1 s2) = fromList [Edge (l, entryLabel s1), Edge (l, entryLabel s2)] `union`
                           flow s1 `union` flow s2
-    flow (While l _ s)  = singleton (Edge (l, initLabel s)) `union`
+    flow (While l _ s)  = singleton (Edge (l, entryLabel s)) `union`
                           S.fromList (scanCont s (\l' -> Edge (l', l))) `union`
                           flow s
-    flow (Seq s1 s2)    = flow s1 `union` S.map (\l -> Edge (l, initLabel s2)) (finalLabels s1) `union` flow s2
-    flow (TryStmt l s _ Nothing) = flow s `union` S.singleton (Edge (l, initLabel s))
+    flow (Seq s1 s2)    = flow s1 `union` S.map (\l -> Edge (l, entryLabel s2)) (exitLabels s1) `union` flow s2
+    flow (TryStmt l s _ Nothing) = flow s `union` S.singleton (Edge (l, entryLabel s))
     flow (TryStmt l s exit (Just (lc, e, sc))) =
-        flow s `union` S.singleton (Edge (l, initLabel s)) `union`
-        flow sc `union` S.singleton (Edge (lc, initLabel sc)) `union`
-        S.map (\l' -> ExitTry (l', exit) l) (finalLabels s) `union`
-        S.singleton (EnterTry (l, initLabel s) (lc, e))
+        flow s `union` S.singleton (Edge (l, entryLabel s)) `union`
+        flow sc `union` S.singleton (Edge (lc, entryLabel sc)) `union`
+        S.map (\l' -> ExitTry (l', exit) l) (exitLabels s) `union`
+        S.singleton (EnterTry (l, entryLabel s) (lc, e))
     flow _              = empty
 
 scanCont :: Stmt a -> (a -> b) -> [b]
@@ -152,6 +162,7 @@ scanBreak (Seq s1 s2) f = scanBreak s1 f ++ scanBreak s2 f
 scanBreak (If _ _ s1 s2) f = scanBreak s1 f ++ scanBreak s2 f
 scanBreak _ _ = []
 
+-- | Labelling of a statement
 labelsOf :: Label a => Stmt a -> M.Map a (Stmt a)
 labelsOf s = case s of
     VarDecl l _ _   -> M.singleton l s

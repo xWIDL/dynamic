@@ -1,4 +1,8 @@
--- Abstract Number
+{-|
+Module      : Primitive.Number
+Description : Abstract primitive float-number type
+-}
+
 module Primitive.Number (ANum(..)) where
 
 import Core.Abstract

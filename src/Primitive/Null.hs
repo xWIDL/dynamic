@@ -1,4 +1,8 @@
--- Abstract Null
+{-|
+Module      : Primitive.Null
+Description : Abstract primitive null type
+-}
+
 module Primitive.Null (ANull(..)) where
 
 import Core.Abstract

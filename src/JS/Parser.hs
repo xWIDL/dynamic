@@ -1,4 +1,7 @@
--- Parser: Parse a JavaScript subset by partial translation
+{-|
+Module      : JS.Parser
+Description : Parse a JavaScript subset by partial translation
+-}
 
 {-# LANGUAGE LambdaCase #-}
 module JS.Parser (L(..), parseJS) where
@@ -10,6 +13,7 @@ import Core.Flow
 import JS.AST
 import JS.Type
 
+-- | Simple integer label
 newtype L = L { unL :: Int } deriving (Eq, Ord)
 
 instance Show L where
@@ -17,8 +21,7 @@ instance Show L where
 
 instance Label L
 
--- NOTE: we first translate ... then relabel. So it is okay to introduce
---       whatever a during translation
+-- | Parse JavaScript source
 parseJS :: String -> Either String (Program L)
 parseJS s = case ES.parseFromString s of
     Right js -> translate js >>= return . relabel
@@ -96,7 +99,7 @@ translateLVal :: Show a => ES.LValue a -> Either String (LVal a)
 translateLVal (ES.LVar _ s) = return $ LVar (Name s)
 translateLVal (ES.LDot _ e s) = do
     e' <- translateExpr e
-    return $ LProp e' (Name s)
+    return $ LAttr e' (Name s)
 translateLVal other = Left $ "Can't translate " ++ show other
 
 translateExpr :: Show a => ES.Expression a -> Either String (Expr a)

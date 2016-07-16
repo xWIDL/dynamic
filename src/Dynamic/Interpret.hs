@@ -1,4 +1,7 @@
--- Interpret: Abstract Intepretation Engine
+{-|
+Module      : Dynamic.Interpret
+Description : Abstract Intepretation Engine
+-}
 
 {-# LANGUAGE TupleSections, LambdaCase #-}
 module Dynamic.Interpret (interpret, InterpretResult) where
@@ -19,15 +22,17 @@ import Control.Monad.Except
 import Control.Monad.Writer
 import Control.Monad.IO.Class (liftIO)
 
-type InterpretResult label p = (Either String (Maybe (Value label p, M.Map Ref (Object label p),
+-- | Analysis result
+type InterpretResult label p = (Either String (Maybe (Value p, M.Map Ref (HeapObject label p),
                                                       Ref),
                                                InterpretState label p), String)
 
+-- | Interpret program starting from a specific block
 interpret :: (Label label, Abstract p, Hom p Prim) => label -> Stmt label -> IO (InterpretResult label p)
 interpret start prog = do
     let flows = flow prog
     let labelDict = labelsOf prog
-    let startTask = Edge (start, initLabel prog)
+    let startTask = Edge (start, entryLabel prog)
     let proc = process labelDict flows TopLevel [] ([startTask]) -- : S.toList flows)
     startSession $ \port -> do
         let initState = InterpretState {
@@ -39,7 +44,7 @@ interpret start prog = do
 process :: (Label label, Abstract p, Hom p Prim) =>
            M.Map label (Stmt label) -> S.Set (Edge label) ->
            ScopeChain label -> CallString label -> WorkList label ->
-           Interpret label p (Maybe ((Value label p), M.Map Ref (Object label p), Ref))
+           Interpret label p (Maybe ((Value p), M.Map Ref (HeapObject label p), Ref))
 process labelDict flows = process'
     where
         process' _ _ [] = return Nothing
@@ -69,7 +74,7 @@ process labelDict flows = process'
                                 Just e  -> interpretExpr l e
                         updateEnvWith_ (bindValue x val) >> cont oldState Nothing
                     Assign l (LVar x) expr -> interpretExpr l expr >>= updateEnvWith_ . bindValue x >> cont oldState Nothing
-                    Assign l (LProp e a) expr -> do
+                    Assign l (LAttr e a) expr -> do
                         exprVal <- interpretExpr l expr
                         v <- interpretExpr l e
                         case v of
@@ -77,11 +82,11 @@ process labelDict flows = process'
                             VRef r  -> do
                                 o <- loadObj r
                                 case o of
-                                    Object dict   -> do
-                                        updateEnvWith_ $ updateObj r (Object (M.insert a exprVal dict))
+                                    HObjDict dict   -> do
+                                        updateEnvWith_ $ insertHObj r (HObjDict (M.insert a exprVal dict))
                                         cont oldState Nothing
-                                    OClos _ _ _ _ -> error "Can't set property of closure"
-                                    OTop          -> throwError' "Can't set property of OTop"
+                                    HObjClos _ _ _ _ -> error "Can't set property of closure"
+                                    HObjTop          -> throwError' "Can't set property of HObjTop"
                             VTop    -> error "Wow, Magic"
                     ReturnStmt l mExpr -> case mExpr of
                         Nothing -> return Nothing
@@ -89,7 +94,7 @@ process labelDict flows = process'
                             retVal <- interpretExpr l e
                             env' <- (_envMap <$> get) >>= lookupM (l2, chain, cstr)
                             partialStore <- reachableFrom retVal
-                            return $ Just (retVal, partialStore, _refCount env')
+                            return $ Just (retVal, partialStore, _nextRef env')
 
                     -- Imperative Control with Path Sensitivity
 
@@ -102,9 +107,9 @@ process labelDict flows = process'
                                         error $ "How can something " ++ show prim ++
                                                 " be neither True or False?"
                                     (Just _tpv, Nothing) ->
-                                        cont oldState (Just [Edge (l, initLabel s1)])
+                                        cont oldState (Just [Edge (l, entryLabel s1)])
                                     (Nothing, Just _fpv) ->
-                                        cont oldState (Just [Edge (l, initLabel s2)])
+                                        cont oldState (Just [Edge (l, entryLabel s2)])
                                     (Just _tpv, Just _fpv) -> cont oldState Nothing
                                     -- FIXME: even we got the restricted primitive value,
                                     --        it is still awkward to use. It is not easy even
@@ -138,7 +143,7 @@ process labelDict flows = process'
                         VPlat name -> do
                             port <- _platPort <$> get
                             vals <- mapM (interpretExpr l) args
-                            reply <- liftIO $ invoke port (LInterface name) f (map valToPlatExpr vals)
+                            reply <- liftIO $ invoke port (LInterface name) f (map valToJsExpr vals)
                             case reply of
                                 Sat -> cont oldState Nothing
                                 Unsat -> throwError "Unsat"
@@ -171,26 +176,26 @@ process labelDict flows = process'
 
                 -- Local Environment Update
                 updateEnvWith f = do
-                    e <- lookupState l2 chain cstr
+                    e <- lookupEnv l2 chain cstr
                     (e', a) <- f e --- NOTE: Monadic f
                     modify (\s -> s { _envMap = M.insert (l2, chain, cstr) e' (_envMap s)})
                     return a
 
                 updateEnvWith_ f = updateEnvWith $ \e -> return (f e, ())
 
-                addBinding l chain' cstr' x v = do
-                    e <- lookupState l chain' cstr'
-                    modify (\s -> s { _envMap = M.insert (l, chain, cstr') (e { _bindings = M.insert x v (_bindings e) }) (_envMap s)})
+                -- addBinding l chain' cstr' x v = do
+                --     e <- lookupEnv l chain' cstr'
+                --     modify (\s -> s { _envMap = M.insert (l, chain, cstr') (e { _bindings = M.insert x v (_bindings e) }) (_envMap s)})
 
                 -- Local and Enclosed Lookup
                 lookupEnvWith err sel = lookupEnvWith' l2 chain cstr
                     where
-                        lookupEnvWith' l chain cstr = do
-                            env <- lookupState l chain cstr
+                        lookupEnvWith' l chain' cstr' = do
+                            env <- lookupEnv l chain' cstr'
                             case sel env of
-                                Just a  -> return (a, chain, cstr)
-                                Nothing -> case (chain, cstr) of
-                                    (Enclosed cs _ father, _ : cstr') -> lookupEnvWith' cs father cstr'
+                                Just a  -> return (a, chain', cstr')
+                                Nothing -> case (chain', cstr') of
+                                    (Enclosed cs _ father, _ : cstr'') -> lookupEnvWith' cs father cstr''
                                     _ -> throwError' err
 
                 valueOf foo@(Name "Foo") = return $ VPlat foo
@@ -203,22 +208,22 @@ process labelDict flows = process'
                 reachableFrom (VRef r) = do
                     o <- loadObj r
                     case o of
-                        Object dict   -> foldr M.union (M.singleton r o) <$> mapM reachableFrom (M.elems dict)
-                        OClos _ _ _ _ -> return $ M.singleton r o
-                        OTop          -> error "FIXME: Wow, Magic!"
+                        HObjDict dict   -> foldr M.union (M.singleton r o) <$> mapM reachableFrom (M.elems dict)
+                        HObjClos _ _ _ _ -> return $ M.singleton r o
+                        HObjTop          -> error "FIXME: Wow, Magic!"
                 reachableFrom VTop     = error "FIXME: Wow, Magic!"
 
                 -- Expression interpretation with side-effects
                 -- NOTE: the "l" here is callsite, maybe we should write it more explicitly
                 interpretExpr _ (PrimLit prim) = return $ VPrim (hom prim)
                 interpretExpr l (ObjExpr dict) = do
-                    obj <- Object . M.fromList <$> mapM (\(name, expr) -> (name,) <$> interpretExpr l expr) dict
+                    obj <- HObjDict . M.fromList <$> mapM (\(name, expr) -> (name,) <$> interpretExpr l expr) dict
                     ref <- updateEnvWith $ return <$> storeObj obj
                     return $ VRef ref
                 interpretExpr _ (VarExpr x) = valueOf x
                 interpretExpr l (GetExpr expr attr) = do
                     VRef ref <- interpretExpr l expr -- XXX: Exception
-                    Object dict <- loadObj ref
+                    HObjDict dict <- loadObj ref
                     lookupM attr dict
                 interpretExpr l (InfixExpr e1 op e2) = do
                     v1 <- interpretExpr l e1
@@ -231,7 +236,7 @@ process labelDict flows = process'
                 interpretExpr l (CallExpr e args) =
                     interpretExpr l e >>= \case
                         VRef ref -> loadObj ref >>= \case
-                            OClos boundChain@(Enclosed _ start _) boundCStr params stmt -> do
+                            HObjClos boundChain@(Enclosed _ start _) boundCStr params stmt -> do
                                 bindings' <- M.fromList <$> flip mapM (zip args params) (\(arg, param) -> do
                                                 v <- interpretExpr l arg
                                                 return (param, v))
@@ -241,18 +246,18 @@ process labelDict flows = process'
                                 env <- (_envMap <$> get) >>= lookupM (l1, chain, cstr)
                                 modify (\s ->
                                             s { _envMap = M.insert (start, boundChain, l : boundCStr)
-                                                                   (Env bindings' (_store env) (_refCount env) (_catcher env))
+                                                                   (Env bindings' (_store env) (_nextRef env) (_catcher env))
                                                                    (_envMap s) })
                                                   -- FIXME: Should we just use `env` here?
                                 mVal <- process newLabelDict newFlows boundChain (l : boundCStr)
-                                                [Edge (start, initLabel stmt)]
+                                                [Edge (start, entryLabel stmt)]
                                 case mVal of
                                     Just (val, store', refCount') -> do
                                         modify (\s ->
                                             s { _envMap = M.insert (l2, chain, cstr)
                                                  (Env (_bindings env)
                                                       (store' `unionStore` (_store env))
-                                                      (refCount' `unionRef` (_refCount env))
+                                                      (refCount' `unionRef` (_nextRef env))
                                                       (_catcher env))
                                                  (_envMap s)})
                                         return val
@@ -260,6 +265,6 @@ process labelDict flows = process'
                             other -> throwError' $ show other ++ " is not closure"
                         other -> throwError' $ show other ++ " is not closure"
 
-                interpretExpr l clos@(Closure start args stmt) = do
-                    ref <- updateEnvWith $ return <$> storeObj (OClos (Enclosed l start chain) cstr args stmt)
+                interpretExpr l (Closure start args stmt) = do
+                    ref <- updateEnvWith $ return <$> storeObj (HObjClos (Enclosed l start chain) cstr args stmt)
                     return $ VRef ref

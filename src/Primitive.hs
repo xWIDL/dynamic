@@ -1,7 +1,12 @@
-module Primitive (module P) where
+{-|
+Module      : Primitive
+Description : Re-export
+-}
 
-import Primitive.Null as P
-import Primitive.Undefined as P
-import Primitive.Number as P
-import Primitive.Bool as P
-import Primitive.String as P
+module Primitive (module Primitive) where
+
+import Primitive.Null as Primitive
+import Primitive.Undefined as Primitive
+import Primitive.Number as Primitive
+import Primitive.Bool as Primitive
+import Primitive.String as Primitive
