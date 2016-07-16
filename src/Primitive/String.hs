@@ -1,5 +1,5 @@
 -- Abstract String
-module Primitive.String where
+module Primitive.String (AString(..)) where
 
 import Core.Abstract
 import JS.Type

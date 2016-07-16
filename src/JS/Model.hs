@@ -1,14 +1,20 @@
 -- Model: Execution Model
 
 {-# LANGUAGE TemplateHaskell #-}
-module JS.Model where
+module JS.Model (
+  Env(..), initEnv, Value(..),
+  ScopeChain(..), CallString,
+  Object(..), Ref(..),
+  storeObj, unionRef, unionStore, updateObj,
+  bindValue, unionEnv, valToPlatExpr
+) where
 
 import Core.Abstract
 import JS.AST
 import JS.Type
+import JS.Platform (JsExpr(..), JsVal(..))
 
 import qualified Data.Map as M
-import Control.Lens
 
 -- Call String: Context Sensitivity
 
@@ -63,13 +69,11 @@ instance (Show a, Show p) => Show (Env a p) where
                "bindings:\n" ++ concatMap (\(Name x, v) -> x ++ "\t" ++ show v ++ "\n") (M.toList (_bindings env)) ++
                "store:\n" ++ concatMap (\(Ref i, o) -> show i ++ "\t" ++ show o ++ "\n") (M.toList (_store env))
 
-$(makeLenses ''Env)
-
 initEnv :: Env a p
 initEnv = Env M.empty M.empty initRef Nothing
 
 bindValue :: Name -> Value a p -> Env a p -> Env a p
-bindValue x v = bindings %~ M.insert x v
+bindValue x v env = env { _bindings = M.insert x v (_bindings env) }
 
 storeObj :: Object a p -> Env a p -> (Env a p, Ref)
 storeObj o env =
@@ -104,3 +108,7 @@ unionObject o1 o2 = if o1 == o2 then o1 else OTop -- FIXME: Wow, So Magic!
 
 unionRef :: Ref -> Ref -> Ref
 unionRef (Ref i1) (Ref _i2) = Ref i1 -- FIXME: Seriously?
+
+valToPlatExpr :: Hom p Prim => Value a p -> JsExpr
+valToPlatExpr (VPrim p)    = JVal (JVPrim (hom p :: Prim))
+valToPlatExpr (VPlatRef r) = JVal (JVRef r)

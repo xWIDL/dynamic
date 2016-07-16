@@ -2,7 +2,7 @@
 
 {-# LANGUAGE TemplateHaskell, PolyKinds, AllowAmbiguousTypes,
              UndecidableInstances, RecordWildCards #-}
-module APrim where
+module APrim (APrim, abool, Match(..)) where
 
 import Core.Abstract
 import Core.Coercion
@@ -10,7 +10,7 @@ import JS.AST
 import JS.Type
 import Common
 import Primitive
-import Control.Lens
+import Control.Lens (makeLenses, Lens', (.~))
 
 data APrim = APrim {
     _aundefined :: AUndefined,
@@ -46,7 +46,7 @@ instance HomLattice ABool Double ANum where
 instance HomLattice ANum Double ANum where
 
 instance Coerce APrim Double where
-    coerce proxy p@(APrim a b c d e) =
+    coerce proxy p@(APrim _a b c d _e) =
         let n = homlat proxy b `join`
                 homlat proxy c `join`
                 homlat proxy d
@@ -88,6 +88,7 @@ instance Lattice APrim where
     bot = APrim bot bot bot bot bot
 
 instance Hom Prim APrim where
+    hom (PInt n)    = anum .~ (hom n) $ bot
     hom (PDouble n) = anum .~ (hom n) $ bot
     hom (PString n) = astring .~ (hom n) $ bot
     hom (PBool n)   = abool .~ (hom n) $ bot
@@ -114,7 +115,7 @@ instance Reduce APrim InfixOp where
             p1s = coerce (Proxy :: Proxy String) p1
             p2s = coerce (Proxy :: Proxy String) p2
             n   = reduce op (_anum p1n) (_anum p2n)
-            s   = reduce op (_astring p1n) (_astring p2n)
+            s   = reduce op (_astring p1s) (_astring p2s)
         in  (anum .~ n) bot `join` (astring .~ s) bot
 
 

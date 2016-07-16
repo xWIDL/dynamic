@@ -2,7 +2,10 @@
 
 {-# LANGUAGE TupleSections, DeriveTraversable, DeriveFunctor, DeriveFoldable, LambdaCase #-}
 
-module JS.AST where
+module JS.AST (
+  Program, Stmt(..), Expr(..), InfixOp(..), LVal(..),
+  labelsOf
+) where
 
 import Core.Flow
 import JS.Type

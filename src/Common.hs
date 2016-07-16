@@ -1,7 +1,7 @@
 -- Common: Commonly useful utilities
 {-# LANGUAGE PolyKinds #-}
 
-module Common where
+module Common (lookupM, Proxy(..)) where
 
 import Control.Monad.Except
 import qualified Data.Map as M

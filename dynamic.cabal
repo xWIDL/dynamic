@@ -17,7 +17,8 @@ executable dynamic
   other-modules:       JS.AST
                        JS.Model
                        JS.Parser
-                       Interpret
+                       Dynamic.Interpret
+                       Dynamic.Defs
                        Common
                        Core.Flow
                        Core.Abstract

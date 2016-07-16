@@ -1,5 +1,5 @@
 -- Abstract Undefined
-module Primitive.Undefined where
+module Primitive.Undefined (AUndefined(..)) where
 
 import Core.Abstract
 import JS.Type

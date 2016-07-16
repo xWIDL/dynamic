@@ -1,7 +1,7 @@
 -- Coercion Framework
 {-# LANGUAGE PolyKinds, ScopedTypeVariables #-}
 
-module Core.Coercion where
+module Core.Coercion (HomLattice(..), Coerce(..)) where
 
 import Core.Abstract
 import Common

@@ -1,5 +1,5 @@
 -- Abstract Bool
-module Primitive.Bool where
+module Primitive.Bool (ABool(..)) where
 
 import Core.Abstract
 import JS.Type

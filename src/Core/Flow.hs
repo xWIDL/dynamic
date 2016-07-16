@@ -1,6 +1,5 @@
 -- Flow: Data Flow among labelled blocks
-{-# LANGUAGE RankNTypes #-}
-module Core.Flow where
+module Core.Flow (Edge(..), Flow(..), Label(..)) where
 
 import JS.Type
 import Data.Set (Set)

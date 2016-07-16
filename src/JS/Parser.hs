@@ -1,7 +1,7 @@
 -- Parser: Parse a JavaScript subset by partial translation
 
 {-# LANGUAGE LambdaCase #-}
-module JS.Parser where
+module JS.Parser (L(..), parseJS) where
 
 import Language.ECMAScript3.Syntax.Annotations
 import qualified Language.ECMAScript3 as ES

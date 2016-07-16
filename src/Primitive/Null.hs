@@ -1,5 +1,5 @@
 -- Abstract Null
-module Primitive.Null where
+module Primitive.Null (ANull(..)) where
 
 import Core.Abstract
 import JS.Type

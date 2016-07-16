@@ -2,9 +2,10 @@ module Main where
 
 import System.Environment
 
-import Interpret
+import Dynamic.Interpret (interpret, InterpretResult)
+import Dynamic.Defs (Abstract(..), InterpretState(..), EnvMap, printEnvMap)
 import JS.Parser
-import APrim
+import APrim (APrim, abool, Match(..))
 import Common
 import Primitive
 
@@ -15,26 +16,33 @@ instance Abstract APrim where
 
 data Option = ShowLog | NoLog deriving (Eq)
 
+printUsage :: IO ()
+printUsage = putStrLn "usage: dynamic -[nolog/showlog] /PATH/TO/X.js"
+
 main :: IO ()
 main = do
     args <- getArgs
-    if (length args > 0) then main' (head args) NoLog
-        else
-            putStrLn "usage: dynamic /PATH/TO/X.js"
+    case args of
+        [optArg, pathArg] ->
+            case optArg of
+                "-showlog" -> main' ShowLog pathArg
+                "-nolog"   -> main' NoLog pathArg
+                _          -> printUsage
+        _ -> printUsage
 
-main' :: String -> Option -> IO ()
-main' file opt = do
+main' :: Option -> String -> IO ()
+main' opt file = do
     src <- readFile file
     case parseJS src of
         Right prog -> do
             putStrLn $ "Program:\n" ++ show prog ++ "\n"
-            ret <- interpret (L (-1)) prog
+            ret <- interpret (L (-1)) prog :: IO (InterpretResult L APrim)
             case ret of
                 (Right (_, s), logging) -> do
                     if opt == ShowLog
-                        then putStrLn $ "\n************** log **************\n\n" ++ logging ++
-                                        (showState . _envMap) (s :: InterpretState L APrim)
-                        else putStrLn $ (showState . _envMap) (s :: InterpretState L APrim)
+                        then putStrLn $ "\n************** log **************\n\n" ++ -- logging-- ++
+                                        (printEnvMap (_envMap s :: EnvMap L APrim))
+                        else putStrLn $ (printEnvMap (_envMap s :: EnvMap L APrim))
                 (Left err, logging) ->
                     putStrLn $ "Failed: " ++ err ++ ", log:\n" ++ logging
         Left err -> putStrLn err

@@ -1,5 +1,7 @@
 -- Abstract: Abstract the essentials out of value
-module Core.Abstract where
+module Core.Abstract (
+  Lattice(..), Hom(..), Reduce(..), meet'
+) where
 
 class Eq a => Lattice a where
     join :: a -> a -> a

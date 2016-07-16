@@ -1,5 +1,5 @@
 -- Abstract Number
-module Primitive.Number where
+module Primitive.Number (ANum(..)) where
 
 import Core.Abstract
 import JS.Type
@@ -15,6 +15,9 @@ instance Hom Double ANum where
     hom x | x >  0 = PosNum
           | x <  0 = NegNum
           | x == 0 = ZeroNum
+
+instance Hom Int ANum where
+    hom x = hom (fromIntegral x :: Double)
 
 instance Hom ANum Double where
     hom ZeroNum = 0.0
