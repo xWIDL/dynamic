@@ -6,7 +6,7 @@ module Main (main) where
 import System.Environment
 
 import Dynamic.Interpret (interpret, InterpretResult)
-import Dynamic.Defs (Abstract(..), InterpretState(..), EnvMap, printEnvMap)
+import Dynamic.Defs (Abstract(..), InterpretState(..), EnvMap, pprintEnvMap)
 import JS.Parser
 import APrim (APrim, selectABool, Match(..))
 import Common
@@ -45,8 +45,8 @@ main' opt file = do
                 (Right (_, s), _) -> do
                     if opt == ShowLog
                         then putStrLn $ "\n************** log **************\n\n" ++
-                                        (printEnvMap (_envMap s :: EnvMap L APrim))
-                        else putStrLn $ (printEnvMap (_envMap s :: EnvMap L APrim))
+                                        (show $ pprintEnvMap (_envMap s :: EnvMap L APrim))
+                        else putStrLn $ (show $ pprintEnvMap (_envMap s :: EnvMap L APrim))
                 (Left err, logging) ->
                     putStrLn $ "Failed: " ++ err ++ ", log:\n" ++ logging
         Left err -> putStrLn err

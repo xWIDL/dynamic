@@ -5,22 +5,25 @@ Description : Definitions used in interpeter
 
 module Dynamic.Defs (
     EnvMap, WorkList, InterpretState(..),
-    Interpret, lookupEnv, printEnvMap,
-    Abstract(..)
+    Interpret, lookupEnv, pprintEnvMap,
+    Abstract(..), Cursor(..), pprintCursor,
+    tryForwardCursor, appendNext, changeCursor,
+    getEdgePair
 ) where
 
 import Core.Abstract (Lattice, Reduce, Hom)
-import Core.Flow (Edge, Label)
-import JS.AST (InfixOp)
+import Core.Flow (Edge(..), Label)
+import JS.AST (InfixOp, Stmt)
 import JS.Type (Prim)
 import JS.Model (Env, initEnv, ScopeChain, CallString)
 import JS.Platform (PlatPort)
 
 import qualified Data.Map as M
-import Control.Monad.State (StateT, get)
+import qualified Data.Set as S
+import Control.Monad.State (StateT, get, modify)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.Writer (WriterT)
-
+import Text.PrettyPrint.Leijen hiding ((<$>))
 
 -- | Abstract Primitive Type Class
 class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p) => Abstract p where
@@ -33,10 +36,21 @@ type WorkList label = [Edge label]
 -- | Mapping of context identifier to environment
 type EnvMap label p = M.Map (label, ScopeChain label, CallString label) (Env label p)
 
+-- | Cursor of current analysis
+data Cursor label = Cursor {
+    _chain :: ScopeChain label,
+    _cstr  :: CallString label,
+    _edge  :: Edge label,
+    _next  :: WorkList label
+} deriving (Show)
+
 -- | Interpreter state
 data InterpretState label p = InterpretState {
-    _envMap   :: EnvMap label p,
-    _platPort :: PlatPort -- ^ Platform communication port
+    _envMap    :: EnvMap label p,
+    _platPort  :: PlatPort, -- ^ Platform communication port,
+    _labelDict :: M.Map label (Stmt label),
+    _flows     :: S.Set (Edge label),
+    _cursor    :: Cursor label
 }
 
 -- | Interpreter monad stack
@@ -51,9 +65,45 @@ lookupEnv l chain cstr = do
         Just e  -> return e
 
 -- | Pretty print EnvMap
-printEnvMap :: (Show l, Abstract p) => EnvMap l p -> String
-printEnvMap = unlines . map (\((l, sc, cstr), env) -> "--------- EnvMap " ++ show l ++ "----------\n" ++
-                                                    "Scope Chain: " ++ show sc ++ "\n" ++
-                                                    "Call String: "  ++ show cstr ++ "\n" ++
-                                                    "Environment: \n" ++ show env ++ "\n"
-                          ) . M.toList
+pprintEnvMap :: (Show l, Abstract p) => EnvMap l p -> Doc
+pprintEnvMap m = vsep $ map pprintEnvEntry (M.toList m)
+    where
+    pprintEnvEntry ((l, sc, cstr), env) = vsep
+        [ text "--------- EnvMap " <> text (show l) <> text "----------",
+          text "Scope Chain:"  <+> text (show sc),
+          text "Call String:"  <+> text (show cstr),
+          text "Environment:"  <>  line <> text (show env) ]
+
+pprintCursor :: (Show label) => Cursor label -> Doc
+pprintCursor cursor = vsep
+    [ text "========== State =========",
+      text "|| chain:" <+> text (show $ _chain cursor),
+      text "|| cstr:" <+> text (show $ _cstr cursor),
+      text "|| edge:" <+> text (show $ _edge cursor),
+      text "|| next:" <+> text (show $ _next cursor) ]
+
+tryForwardCursor :: Interpret label p Bool
+tryForwardCursor = do
+    wl <- (_next . _cursor) <$> get
+    case wl of
+        [] -> return False -- failed
+        w:wl' -> do
+            modify (\s -> s { _cursor = (_cursor s) { _edge = w, _next = wl' } })
+            return True
+
+appendNext :: WorkList label -> Interpret label p ()
+appendNext wl =
+    modify $ \s ->
+    let cursor = _cursor s
+        cursor' = cursor { _next = (_next cursor) ++ wl }
+    in s { _cursor = cursor' }
+
+changeCursor :: Cursor label -> Interpret label p ()
+changeCursor cursor = modify $ \s -> s { _cursor = cursor }
+
+getEdgePair :: Cursor label -> (label, label)
+getEdgePair cursor =
+    case (_edge cursor) of
+        Edge p -> p
+        ExitTry p _ -> p
+        EnterTry p _ -> p
