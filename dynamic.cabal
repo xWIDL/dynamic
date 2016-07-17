@@ -36,6 +36,7 @@ executable dynamic
                        FlexibleContexts
                        RankNTypes
                        ScopedTypeVariables
+                       LambdaCase
 
   build-depends:       base >=4.9 && <4.10, containers, lens, mtl,
                        language-ecmascript, js-bridge, wl-pprint

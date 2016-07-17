@@ -8,8 +8,8 @@ module JS.Model (
   Env(..), initEnv, Value(..), Bindings, Store,
   ScopeChain(..), CallString,
   HeapObject(..), Ref(..),
-  storeObj, unionRef, unionStore, insertHObj,
-  bindValue, unionEnv, valToJsExpr
+  storeObj, joinRef, joinStore, insertHObj,
+  bindValue, joinEnv, valToJsExpr
 ) where
 
 import Core.Abstract
@@ -89,25 +89,25 @@ storeObj o env =
 insertHObj :: Ref -> HeapObject label p -> Env label p -> Env label p
 insertHObj r o env = env { _store = M.insert r o (_store env) }
 
-unionEnv :: (Eq label, Lattice p) => Env label p -> Env label p -> Env label p
-unionEnv (Env b1 s1 rc1 c) (Env b2 s2 rc2 _) =
-    Env (b1 `unionBindings` b2) (s1 `unionStore` s2) (rc1 `unionRef` rc2) c
+joinEnv :: (Eq label, Lattice p) => Env label p -> Env label p -> Env label p
+joinEnv (Env b1 s1 rc1 c) (Env b2 s2 rc2 _) =
+    Env (b1 `joinBindings` b2) (s1 `joinStore` s2) (rc1 `joinRef` rc2) c
 
-unionBindings :: Lattice p => Bindings p -> Bindings p -> Bindings p
-unionBindings = M.unionWith unionValue
+joinBindings :: Lattice p => Bindings p -> Bindings p -> Bindings p
+joinBindings = M.unionWith joinValue
 
-unionStore :: (Eq label, Eq p) => Store label p -> Store label p -> Store label p
-unionStore = M.unionWith unionHeapObject
+joinStore :: (Eq label, Eq p) => Store label p -> Store label p -> Store label p
+joinStore = M.unionWith joinHeapObject
 
-unionValue :: Lattice p => Value p -> Value p -> Value p
-unionValue (VPrim p1) (VPrim p2) = VPrim $ join p1 p2
-unionValue v1 v2 = if v1 == v2 then v1 else VTop -- FIXME: Wow, Magic!
+joinValue :: Lattice p => Value p -> Value p -> Value p
+joinValue (VPrim p1) (VPrim p2) = VPrim $ join p1 p2
+joinValue v1 v2 = if v1 == v2 then v1 else VTop -- FIXME: Wow, Magic!
 
-unionHeapObject :: (Eq label, Eq p) => HeapObject label p -> HeapObject label p -> HeapObject label p
-unionHeapObject o1 o2 = if o1 == o2 then o1 else HObjTop -- FIXME: Wow, So Magic!
+joinHeapObject :: (Eq label, Eq p) => HeapObject label p -> HeapObject label p -> HeapObject label p
+joinHeapObject o1 o2 = if o1 == o2 then o1 else HObjTop -- FIXME: Wow, So Magic!
 
-unionRef :: Ref -> Ref -> Ref
-unionRef (Ref i1) (Ref _i2) = Ref i1 -- FIXME: Seriously?
+joinRef :: Ref -> Ref -> Ref
+joinRef (Ref i1) (Ref _i2) = Ref i1 -- FIXME: Seriously?
 
 -- | Value to Platform JS Expression
 valToJsExpr :: Hom p Prim => Value p -> JsExpr

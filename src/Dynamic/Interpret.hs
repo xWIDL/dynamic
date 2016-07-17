@@ -17,7 +17,7 @@ import JS.Type
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Control.Monad (forM)
 import Control.Monad.State
 import Control.Monad.Except
@@ -28,18 +28,32 @@ import Control.Monad.IO.Class (liftIO)
 type InterpretResult label p = (Either String (GoResult label p, InterpretState label p), String)
 
 -- | Interpret program starting from a specific block
-interpret :: (Label label, Abstract p, Hom p Prim) => label -> Stmt label -> IO (InterpretResult label p)
-interpret start prog = do
+interpret :: (Label label, Abstract p, Hom p Prim) =>
+             Bool -> label -> Stmt label -> IO (InterpretResult label p)
+interpret connected start prog = do
     let cursor = Cursor TopLevel [] (Edge (start, entryLabel prog)) []
-    startSession $ \port -> do
-        let initState = InterpretState {
-            _envMap = M.singleton (start, TopLevel, []) initEnv,
-            _platPort = port,
-            _labelDict = labelsOf prog,
-            _flows = flow prog,
-            _cursor = cursor
-        }
-        runWriterT (runExceptT (runStateT go initState))
+    if connected
+        then do
+            startSession $ \port -> do
+                let initState = InterpretState {
+                    _envMap = M.singleton (start, TopLevel, []) initEnv,
+                    _platPort = Just port,
+                    _labelDict = labelsOf prog,
+                    _flows = flow prog,
+                    _cursor = cursor,
+                    _connected = connected
+                }
+                runWriterT (runExceptT (runStateT go initState))
+        else do
+            let initState = InterpretState {
+                _envMap = M.singleton (start, TopLevel, []) initEnv,
+                _platPort = Nothing,
+                _labelDict = labelsOf prog,
+                _flows = flow prog,
+                _cursor = cursor,
+                _connected = connected
+            }
+            runWriterT (runExceptT (runStateT go initState))
 
 type GoResult label p = Maybe (Value p, M.Map Ref (HeapObject label p), Ref)
 
@@ -54,11 +68,11 @@ go = do
     env <- lookupM (l1, _chain cursor, _cstr cursor) oldState
 
     case _edge cursor of
-        Edge _ -> updateEnvWith_ (unionEnv env)
-        EnterTry _ catcher -> updateEnvWith_ (unionEnv (env { _catcher = Just catcher}))
+        Edge _ -> updateEnvWith_ (joinEnv env)
+        EnterTry _ catcher -> updateEnvWith_ (joinEnv (env { _catcher = Just catcher}))
         ExitTry _ tryHead  -> do
             envOld <- lookupM (tryHead, _chain cursor, _cstr cursor) oldState
-            updateEnvWith_ (unionEnv (env { _catcher = _catcher envOld }))
+            updateEnvWith_ (joinEnv (env { _catcher = _catcher envOld }))
 
     labelDict <- _labelDict <$> get
     case M.lookup l2 labelDict of
@@ -133,15 +147,22 @@ go = do
                                   (_envMap s) })
                 cont oldState (Just [Edge (l, catcher)])
             -- XXX: don't really fit in the style, but let's make a quick hack though
-            InvokeStmt l e f args -> interpretExpr l e >>= \case
-                VPlat name -> do
-                    port <- _platPort <$> get
-                    vals <- mapM (interpretExpr l) args
-                    reply <- liftIO $ invoke port (LInterface name) f (map valToJsExpr vals)
-                    case reply of
-                        Sat -> cont oldState Nothing
-                        Unsat -> throwError "Unsat"
-                other -> throwError' $ "can't call on " ++ show other
+            InvokeStmt l e f args -> do
+                connected <- _connected <$> get
+                if connected
+                    then do            
+                        interpretExpr l e >>= \case
+                            VPlat name -> do
+                                port <- fromJust . _platPort <$> get
+                                vals <- mapM (interpretExpr l) args
+                                reply <- liftIO $ invoke port (LInterface name) f (map valToJsExpr vals)
+                                case reply of
+                                    Sat -> cont oldState Nothing
+                                    Unsat -> throwError "Unsat"
+                            other -> throwError' $ "can't call on " ++ show other
+                    else do
+                        liftIO $ putStrLn "[WARNING] Invalia invocation without connection"
+                        cont oldState Nothing
 
             other -> throwError' $ "can't interpret " ++ show other
 
@@ -279,8 +300,8 @@ interpretExpr l (CallExpr e args) =
                         modify (\s ->
                             s { _envMap = M.insert (l2, chain, cstr)
                                  (Env (_bindings env)
-                                      (store' `unionStore` _store env)
-                                      (refCount' `unionRef` _nextRef env)
+                                      (store' `joinStore` _store env)
+                                      (refCount' `joinRef` _nextRef env)
                                       (_catcher env))
                                  (_envMap s)})
                         return val

@@ -20,30 +20,42 @@ instance Abstract APrim where
 data Option = ShowLog | NoLog deriving (Eq)
 
 printUsage :: IO ()
-printUsage = putStrLn "usage: dynamic -[nolog/showlog] /PATH/TO/X.js"
+printUsage = putStrLn "usage: dynamic -[conn/disconn] -[nolog/showlog] /PATH/TO/X.js"
+
+
 
 -- | main
 main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [optArg, pathArg] ->
-            case optArg of
-                "-showlog" -> main' ShowLog pathArg
-                "-nolog"   -> main' NoLog pathArg
-                _          -> printUsage
+        [connArg, logArg, pathArg] -> do
+            let mConnArg = parseConnArg connArg
+            let mlogArg = parseLogArg logArg
+            case (mConnArg, mlogArg) of
+                (Just connArg', Just logArg') -> main' connArg' logArg' pathArg
+                _ -> printUsage
         _ -> printUsage
+    where
+        parseConnArg = \case
+            "-conn" -> Just True
+            "-disconn" -> Just False
+            _ -> Nothing
+        parseLogArg = \case
+            "-showlog" -> Just ShowLog
+            "-nolog" -> Just NoLog
+            _ -> Nothing
 
-main' :: Option -> String -> IO ()
-main' opt file = do
+main' :: Bool -> Option -> String -> IO ()
+main' connArg logArg file = do
     src <- readFile file
     case parseJS src of
         Right prog -> do
             putStrLn $ "Program:\n" ++ show prog ++ "\n"
-            ret <- interpret (L (-1)) prog :: IO (InterpretResult L APrim)
+            ret <- interpret connArg (L (-1)) prog :: IO (InterpretResult L APrim)
             case ret of
                 (Right (_, s), _) -> do
-                    if opt == ShowLog
+                    if logArg == ShowLog
                         then putStrLn $ "\n************** log **************\n\n" ++
                                         (show $ pprintEnvMap (_envMap s :: EnvMap L APrim))
                         else putStrLn $ (show $ pprintEnvMap (_envMap s :: EnvMap L APrim))

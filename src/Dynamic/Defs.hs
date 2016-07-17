@@ -47,10 +47,11 @@ data Cursor label = Cursor {
 -- | Interpreter state
 data InterpretState label p = InterpretState {
     _envMap    :: EnvMap label p,
-    _platPort  :: PlatPort, -- ^ Platform communication port,
+    _platPort  :: Maybe PlatPort, -- ^ Platform communication port,
     _labelDict :: M.Map label (Stmt label),
     _flows     :: S.Set (Edge label),
-    _cursor    :: Cursor label
+    _cursor    :: Cursor label,
+    _connected :: Bool
 }
 
 -- | Interpreter monad stack
