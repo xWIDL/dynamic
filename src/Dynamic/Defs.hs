@@ -14,9 +14,9 @@ module Dynamic.Defs (
 import Core.Abstract (Lattice, Reduce, Hom)
 import Core.Flow (Edge(..), Label)
 import JS.AST (InfixOp, Stmt)
-import JS.Type (Prim)
+import Language.JS.Type (Prim)
 import JS.Model (Env, initEnv, ScopeChain, CallString)
-import JS.Platform (PlatPort)
+import Language.JS.Platform (PlatPort)
 
 import qualified Data.Map as M
 import qualified Data.Set as S

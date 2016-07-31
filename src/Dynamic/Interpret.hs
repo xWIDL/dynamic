@@ -12,8 +12,8 @@ import Core.Flow
 import Core.Abstract
 import JS.AST
 import JS.Model
-import JS.Platform
-import JS.Type
+import Language.JS.Platform
+import Language.JS.Type
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -155,10 +155,11 @@ go = do
                             VPlat name -> do
                                 port <- fromJust . _platPort <$> get
                                 vals <- mapM (interpretExpr l) args
-                                reply <- liftIO $ invoke port (LInterface name) f (map valToJsExpr vals)
+                                reply <- liftIO $ invoke port (LInterface name) f (map (valToJsExpr env) vals)
                                 case reply of
-                                    Sat -> cont oldState Nothing
+                                    Sat _ -> cont oldState Nothing
                                     Unsat -> throwError "Unsat"
+                                    _     -> throwError $ "Unsupported reply: " ++ show reply
                             other -> throwError' $ "can't call on " ++ show other
                     else do
                         liftIO $ putStrLn "[WARNING] Invalia invocation without connection"

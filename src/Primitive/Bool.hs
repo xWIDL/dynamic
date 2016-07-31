@@ -5,7 +5,7 @@ Description : Abstract primitive boolean type
 module Primitive.Bool (ABool(..)) where
 
 import Core.Abstract
-import JS.Type
+import Language.JS.Type
 import JS.AST
 
 data ABool = FalseBool | TrueBool | TopBool | BotBool deriving (Show, Eq)

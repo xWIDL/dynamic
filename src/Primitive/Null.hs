@@ -6,7 +6,7 @@ Description : Abstract primitive null type
 module Primitive.Null (ANull(..)) where
 
 import Core.Abstract
-import JS.Type
+import Language.JS.Type
 import JS.AST
 
 data ANull = Null | NullBot deriving (Show, Eq)

@@ -5,7 +5,7 @@ Description : Data flow between labelled blocks
 
 module Core.Flow (Edge(..), Flow(..), Label) where
 
-import JS.Type
+import Language.JS.Type
 import Data.Set (Set)
 
 -- | Edge connecting two blocks

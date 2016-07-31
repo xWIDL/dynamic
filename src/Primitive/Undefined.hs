@@ -6,7 +6,7 @@ Description : Abstract primitive undefined type
 module Primitive.Undefined (AUndefined(..)) where
 
 import Core.Abstract
-import JS.Type
+import Language.JS.Type
 import JS.AST
 
 data AUndefined = Undefined | UndefinedBot deriving (Show, Eq)

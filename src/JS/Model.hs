@@ -14,8 +14,8 @@ module JS.Model (
 
 import Core.Abstract
 import JS.AST
-import JS.Type
-import JS.Platform (JsExpr(..), JsVal(..))
+import Language.JS.Type
+import Language.JS.Platform (JsExpr(..), JsVal(..))
 
 import qualified Data.Map as M
 
@@ -110,6 +110,17 @@ joinRef :: Ref -> Ref -> Ref
 joinRef (Ref i1) (Ref _i2) = Ref i1 -- FIXME: Seriously?
 
 -- | Value to Platform JS Expression
-valToJsExpr :: Hom p Prim => Value p -> JsExpr
-valToJsExpr (VPrim p)    = JVal (JVPrim (hom p :: Prim))
-valToJsExpr (VPlatRef r) = JVal (JVRef r)
+valToJsExpr :: (Show p, Show label) => Hom p Prim => Env label p -> Value p -> JsExpr
+valToJsExpr env = \case
+  VPrim p     -> JVal (JVPrim (hom p :: Prim))
+  VPlatRef r  -> JVal (JVRef r)
+  VPlat n     -> JInterface n
+  VRef r      -> refToJsExpr env r
+  other       -> error $ "Doesn't support valToJsExpr of " ++ show other
+
+refToJsExpr :: (Show p, Show label) => Env label p -> Ref -> JsExpr
+refToJsExpr e r =
+  case M.lookup r (_store e) of
+    Just (HObjClos _ _ names _) -> JVal (JVClos (length names))
+    Just o -> error $ "No refToJsExpr support for " ++ show o
+    Nothing -> error $ "Invalid ref: " ++ show r

@@ -11,7 +11,7 @@ import qualified Language.ECMAScript3 as ES
 
 import Core.Flow
 import JS.AST
-import JS.Type
+import Language.JS.Type
 
 -- | Simple integer label
 newtype L = L { unL :: Int } deriving (Eq, Ord)

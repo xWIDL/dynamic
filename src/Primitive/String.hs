@@ -6,7 +6,7 @@ Description : Abstract primitive string type
 module Primitive.String (AString(..)) where
 
 import Core.Abstract
-import JS.Type
+import Language.JS.Type
 import JS.AST
 
 data AString = EmptyString | NonEmptyString | TopString | BotString deriving (Show, Eq)

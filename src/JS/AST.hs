@@ -11,7 +11,7 @@ module JS.AST (
 ) where
 
 import Core.Flow
-import JS.Type
+import Language.JS.Type
 
 import Data.Set hiding (foldr, map)
 import qualified Data.Set as S

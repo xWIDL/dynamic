@@ -6,7 +6,7 @@ Description : Abstract primitive float-number type
 module Primitive.Number (ANum(..)) where
 
 import Core.Abstract
-import JS.Type
+import Language.JS.Type
 import JS.AST
 
 data ANum = NegNum | ZeroNum | PosNum | TopNum | BotNum deriving (Show, Eq)

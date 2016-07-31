@@ -10,7 +10,7 @@ module APrim (APrim, selectABool, Match(..)) where
 import Core.Abstract
 import Core.Coercion
 import JS.AST
-import JS.Type
+import Language.JS.Type
 import Common
 import Primitive
 import Control.Lens (makeLenses, Lens', (.~))
