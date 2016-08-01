@@ -39,6 +39,7 @@ data Value p = VPrim p        -- ^ Abstract primitive
              | VRef Ref       -- ^ Heap object
              | VPlat Name     -- ^ Platform object
              | VPlatRef JRef  -- ^ Platform heap object
+             | VPlatCall Name Name -- ^ Calling the platform object
              | VTop           -- ^ Any value, used to model value lattice
              deriving (Show, Eq)
 

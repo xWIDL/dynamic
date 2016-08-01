@@ -15,6 +15,7 @@ import Core.Abstract (Lattice, Reduce, Hom)
 import Core.Flow (Edge(..), Label)
 import JS.AST (InfixOp, Stmt)
 import Language.JS.Type (Prim)
+import Primitive
 import JS.Model (Env, initEnv, ScopeChain, CallString)
 import Language.JS.Platform (PlatPort)
 
@@ -26,7 +27,8 @@ import Control.Monad.Writer (WriterT)
 import Text.PrettyPrint.Leijen hiding ((<$>))
 
 -- | Abstract Primitive Type Class
-class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p) => Abstract p where
+class (Lattice p, Show p, Reduce p InfixOp, Hom Prim p,
+       Hom ABool p, Hom ANum p, Hom AString p) => Abstract p where
     -- | Used by path sensitivity analysis
     matchBool :: p -> (Maybe p, Maybe p)
 

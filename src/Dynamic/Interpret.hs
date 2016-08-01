@@ -11,6 +11,7 @@ import Primitive
 import Dynamic.Defs
 import Core.Flow
 import Core.Abstract
+import Core.Domain
 import JS.AST
 import JS.Model
 import Language.JS.Platform
@@ -232,7 +233,7 @@ lookupEnvWith err sel = do
                     _ -> throwError' err
 
 valueOf :: Label label => Name -> Interpret label p (Value p)
-valueOf foo@(Name "Foo") = return $ VPlat foo
+valueOf foo@(Name "Foo") = return $ VPlat foo -- XXX: we should have a parametric table for this purpose
 valueOf x = (\(a, _, _) -> a) <$> lookupEnvWith ("can't find value of binding: " ++ show x)
                                                 (M.lookup x . _bindings)
 
@@ -259,10 +260,12 @@ interpretExpr l (ObjExpr dict) = do
     ref <- updateEnvWith $ return <$> storeObj obj
     return $ VRef ref
 interpretExpr _ (VarExpr x) = valueOf x
-interpretExpr l (GetExpr expr attr) = do
-    VRef ref <- interpretExpr l expr -- XXX: Exception
-    HObjDict dict <- loadObj ref
-    lookupM attr dict
+interpretExpr l (GetExpr expr attr) =
+    interpretExpr l expr >>= \case
+        VRef ref -> do
+            HObjDict dict <- loadObj ref
+            lookupM attr dict
+        VPlat x -> return (VPlatCall x attr)
 interpretExpr l (InfixExpr e1 op e2) = do
     v1 <- interpretExpr l e1
     v2 <- interpretExpr l e2
@@ -309,28 +312,36 @@ interpretExpr l (CallExpr e args) =
                         return val
                     Nothing  -> return $ VPrim (hom PUndefined)
             other -> throwError' $ show other ++ " is not closure"
-        -- VPlat name -> do
-        --     connected <- _connected <$> get
-        --     if connected
-        --         then do
-        --             port <- fromJust . _platPort <$> get
-        --             vals <- mapM (interpretExpr l) args
-        --             reply <- liftIO $ invoke port (LInterface name) f (map (valToJsExpr env) vals)
-        --             case reply of
-        --                 Sat Nothing -> return $ VPrim (hom PUndefined)
-        --                 Replies primTy assertResults ->
-        --                     case primTy of
-        --                         PTyInt    -> return $ VPrim (hom (reflect (Proxy :: Proxy ANum) assertResults))
-        --                         PTyDouble -> return $ VPrim (hom (reflect (Proxy :: Proxy ANum) assertResults))
-        --                         PTyString -> return $ VPrim (hom (reflect (Proxy :: Proxy AString) assertResults))
-        --                         PTyBool   -> return $ VPrim (hom (reflect (Proxy :: Proxy ABool) assertResults))
-        --                         _ -> throwError $ "Confusing primty: " ++ show primTy
-        --                 Unsat -> throwError "Unsat"
-        --                 _     -> throwError $ "Unsupported reply: " ++ show reply
-        --                 other -> throwError' $ "can't call on " ++ show other
-        --         else do
-        --             liftIO $ putStrLn "[WARNING] Invalid invocation without connection"
-        --             cont oldState Nothing
+        VPlatCall name f -> do
+            connected <- _connected <$> get
+            if connected
+                then do
+                    port <- fromJust . _platPort <$> get
+                    vals <- mapM (interpretExpr l) args
+
+                    -- XXX: env setting like this looks verbose to me, can we fix that?
+                    cursor <- _cursor <$> get
+                    let chain = _chain cursor
+                    let cstr = _cstr cursor
+                    let (l1, l2) = getEdgePair cursor
+                    env <- (_envMap <$> get) >>= lookupM (l1, chain, cstr)
+
+                    reply <- liftIO $ invoke port (LInterface name) f (map (valToJsExpr env) vals)
+                    case reply of
+                        Sat Nothing -> return $ VPrim (hom PUndefined)
+                        Replies primTy assertResults ->
+                            case primTy of
+                                PTyInt    -> return $ VPrim (hom (reflect (Proxy :: Proxy ANum) assertResults))
+                                PTyDouble -> return $ VPrim (hom (reflect (Proxy :: Proxy ANum) assertResults))
+                                PTyString -> return $ VPrim (hom (reflect (Proxy :: Proxy AString) assertResults))
+                                PTyBool   -> return $ VPrim (hom (reflect (Proxy :: Proxy ABool) assertResults))
+                                _ -> throwError $ "Confusing primty: " ++ show primTy
+                        Unsat -> throwError "Unsat"
+                        _     -> throwError $ "Unsupported reply: " ++ show reply
+                        other -> throwError' $ "can't call on " ++ show other
+                else do
+                    liftIO $ putStrLn "[WARNING] Invalid invocation without connection"
+                    return $ VPrim (hom PUndefined)
         other -> throwError' $ show other ++ " is not closure"
 
 interpretExpr l (Closure start args stmt) = do
