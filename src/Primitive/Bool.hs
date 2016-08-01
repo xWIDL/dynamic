@@ -5,7 +5,9 @@ Description : Abstract primitive boolean type
 module Primitive.Bool (ABool(..)) where
 
 import Core.Abstract
+import Core.Domain
 import Language.JS.Type
+import Language.JS.Platform
 import JS.AST
 
 data ABool = FalseBool | TrueBool | TopBool | BotBool deriving (Show, Eq)
@@ -17,6 +19,12 @@ instance Lattice ABool where
 instance Hom Bool ABool where
     hom True = TrueBool
     hom False = FalseBool
+
+instance Domain ABool where
+    domainsOf _ =
+        let b = Name "b"
+        in [ JAssert b (equalsTo b (PBool True))
+           , JAssert b (equalsTo b (PBool False)) ]
 
 instance Hom ABool Bool where
     hom TrueBool  = True
@@ -35,3 +43,4 @@ instance Hom ABool String where
 instance Hom ABool Double where
     hom TrueBool  = 1.0
     hom FalseBool = 0.0
+

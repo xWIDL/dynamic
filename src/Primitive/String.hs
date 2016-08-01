@@ -6,7 +6,9 @@ Description : Abstract primitive string type
 module Primitive.String (AString(..)) where
 
 import Core.Abstract
+import Core.Domain
 import Language.JS.Type
+import Language.JS.Platform
 import JS.AST
 
 data AString = EmptyString | NonEmptyString | TopString | BotString deriving (Show, Eq)
@@ -18,6 +20,12 @@ instance Lattice AString where
 instance Hom String AString where
     hom "" = EmptyString
     hom _  = NonEmptyString
+
+instance Domain AString where
+    domainsOf _ =
+        let s = Name "s"
+        in [ JAssert s (equalsTo s (PString ""))
+           , JAssert s (notEqualsTo s (PString "")) ]
 
 instance Hom AString String where
     hom EmptyString    = ""

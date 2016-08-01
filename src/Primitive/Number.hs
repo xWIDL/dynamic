@@ -6,7 +6,9 @@ Description : Abstract primitive float-number type
 module Primitive.Number (ANum(..)) where
 
 import Core.Abstract
+import Core.Domain
 import Language.JS.Type
+import Language.JS.Platform
 import JS.AST
 
 data ANum = NegNum | ZeroNum | PosNum | TopNum | BotNum deriving (Show, Eq)
@@ -19,6 +21,13 @@ instance Hom Double ANum where
     hom x | x >  0 = PosNum
           | x <  0 = NegNum
           | x == 0 = ZeroNum
+
+instance Domain ANum where
+    domainsOf _ =
+        let n = Name "n"
+        in [ JAssert n (greaterThan n (PDouble 0.0))
+           , JAssert n (lessThan n (PDouble 0.0))
+           , JAssert n (equalsTo n (PDouble 0.0)) ]
 
 instance Hom Int ANum where
     hom x = hom (fromIntegral x :: Double)
