@@ -8,6 +8,7 @@ import System.Environment
 import Dynamic.Interpret (interpret, InterpretResult)
 import Dynamic.Defs (Abstract(..), InterpretState(..), EnvMap, pprintEnvMap)
 import JS.Parser
+import JS.AST (prettyPrint)
 import APrim (APrim, selectABool, Match(..))
 import Common
 import Primitive
@@ -51,7 +52,7 @@ main' connArg logArg file = do
     src <- readFile file
     case parseJS src of
         Right prog -> do
-            putStrLn $ "Program:\n" ++ show prog ++ "\n"
+            putStrLn $ "Program:\n" ++ prettyPrint prog ++ "\n"
             ret <- interpret connArg (L (-1)) prog :: IO (InterpretResult L APrim)
             case ret of
                 (Right (_, s), _) -> do

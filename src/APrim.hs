@@ -97,11 +97,20 @@ instance Lattice APrim where
 
 instance Hom Prim APrim where
     hom (PInt n)    = anum .~ (hom n) $ bot
-    hom (PDouble n) = anum .~ (hom n) $ bot
+    hom (PDouble n) = anum .~ (hom n) $ bot -- Funny
     hom (PString n) = astring .~ (hom n) $ bot
     hom (PBool n)   = abool .~ (hom n) $ bot
     hom PNull       = anull .~ (hom PNull) $ bot
     hom PUndefined  = aundefined .~ (hom PUndefined) $ bot
+
+instance Hom ANum APrim where
+    hom x = anum .~ x $ bot
+
+instance Hom AString APrim where
+    hom x = astring .~ x $ bot
+
+instance Hom ABool APrim where
+    hom x = abool .~ x $ bot
 
 instance Hom APrim Prim where
     hom (APrim _ p2 p3 p4 p5)

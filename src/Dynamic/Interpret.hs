@@ -7,6 +7,7 @@ Description : Abstract Intepretation Engine
 module Dynamic.Interpret where
 
 import Common
+import Primitive
 import Dynamic.Defs
 import Core.Flow
 import Core.Abstract
@@ -157,12 +158,12 @@ go = do
                                 vals <- mapM (interpretExpr l) args
                                 reply <- liftIO $ invoke port (LInterface name) f (map (valToJsExpr env) vals)
                                 case reply of
-                                    Sat _ -> cont oldState Nothing
+                                    Sat _ -> cont oldState Nothing -- throw away the result
                                     Unsat -> throwError "Unsat"
                                     _     -> throwError $ "Unsupported reply: " ++ show reply
                             other -> throwError' $ "can't call on " ++ show other
                     else do
-                        liftIO $ putStrLn "[WARNING] Invalia invocation without connection"
+                        liftIO $ putStrLn "[WARNING] Invalid invocation without connection"
                         cont oldState Nothing
 
             other -> throwError' $ "can't interpret " ++ show other
@@ -308,6 +309,28 @@ interpretExpr l (CallExpr e args) =
                         return val
                     Nothing  -> return $ VPrim (hom PUndefined)
             other -> throwError' $ show other ++ " is not closure"
+        -- VPlat name -> do
+        --     connected <- _connected <$> get
+        --     if connected
+        --         then do
+        --             port <- fromJust . _platPort <$> get
+        --             vals <- mapM (interpretExpr l) args
+        --             reply <- liftIO $ invoke port (LInterface name) f (map (valToJsExpr env) vals)
+        --             case reply of
+        --                 Sat Nothing -> return $ VPrim (hom PUndefined)
+        --                 Replies primTy assertResults ->
+        --                     case primTy of
+        --                         PTyInt    -> return $ VPrim (hom (reflect (Proxy :: Proxy ANum) assertResults))
+        --                         PTyDouble -> return $ VPrim (hom (reflect (Proxy :: Proxy ANum) assertResults))
+        --                         PTyString -> return $ VPrim (hom (reflect (Proxy :: Proxy AString) assertResults))
+        --                         PTyBool   -> return $ VPrim (hom (reflect (Proxy :: Proxy ABool) assertResults))
+        --                         _ -> throwError $ "Confusing primty: " ++ show primTy
+        --                 Unsat -> throwError "Unsat"
+        --                 _     -> throwError $ "Unsupported reply: " ++ show reply
+        --                 other -> throwError' $ "can't call on " ++ show other
+        --         else do
+        --             liftIO $ putStrLn "[WARNING] Invalid invocation without connection"
+        --             cont oldState Nothing
         other -> throwError' $ show other ++ " is not closure"
 
 interpretExpr l (Closure start args stmt) = do

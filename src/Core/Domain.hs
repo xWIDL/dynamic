@@ -10,7 +10,7 @@ binder = Name "x"
 
 class Domain a where
     domainsOf :: Proxy a -> [JAssert]
-
+    reflect :: Proxy a -> [Bool] -> a
 
 makeRel r n p = JRel r (JVal (JVVar n)) (JVal (JVPrim p))
 

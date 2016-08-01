@@ -29,6 +29,13 @@ instance Domain ANum where
            , JAssert n (lessThan n (PDouble 0.0))
            , JAssert n (equalsTo n (PDouble 0.0)) ]
 
+    reflect _ (g0:l0:e0:[])
+        | g0 && not l0 && not e0     = PosNum
+        | not g0 && l0 && not e0     = NegNum
+        | not g0 && not l0 && e0     = ZeroNum
+        | not g0 && not l0 && not e0 = BotNum
+        | otherwise                  = TopNum
+
 instance Hom Int ANum where
     hom x = hom (fromIntegral x :: Double)
 

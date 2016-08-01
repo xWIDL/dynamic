@@ -7,13 +7,15 @@ Description : A subset of JavaScript
 
 module JS.AST (
   Program, Stmt(..), Expr(..), InfixOp(..), LVal(..),
-  labelsOf
+  labelsOf, prettyPrint
 ) where
 
 import Core.Flow
 import Language.JS.Type
 
-import Data.Set hiding (foldr, map)
+import Text.PrettyPrint.Leijen
+
+import Data.Set hiding (foldr, empty, map)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -33,7 +35,7 @@ data Stmt a = VarDecl a Name (Maybe (Expr a))   -- ^ > var <x> [= <expr>]
             | TryStmt a (Stmt a) a (Maybe (a, Name, Stmt a)) -- ^ try  { <stmt> } [catch (<x>) { <stmt> } ]
             | ThrowStmt a (Expr a) -- ^ > throw <expr>
             | InvokeStmt a (Expr a) Name [Expr a] -- > ^ (<expr>).<f>(<expr>*)
-            deriving (Eq, Functor, Foldable, Traversable)
+            deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | JS expression
 data Expr a = PrimLit Prim -- ^ primitive literal
@@ -43,68 +45,83 @@ data Expr a = PrimLit Prim -- ^ primitive literal
             | InfixExpr (Expr a) InfixOp (Expr a) -- ^ > <expr> <op> <expr>
             | CallExpr (Expr a) [Expr a] -- ^ @ (<expr>)(<expr>*) @, the first might be evaluated to a closure
             | Closure a [Name] (Stmt a) -- ^ > function (<x>*) { <stmt> }
-            deriving (Eq, Functor, Foldable, Traversable)
+            deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | Infix binary operator
-data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Eq)
+data InfixOp = OPlus | OSubs | OMult | ODiv deriving (Show, Eq)
 
 -- | Left-hand-side value
 data LVal a = LVar Name -- ^ variable
             | LAttr (Expr a) Name -- ^ > (<expr>).<x>
-            deriving (Eq, Functor, Foldable, Traversable)
+            deriving (Show, Eq, Functor, Foldable, Traversable)
 
-instance Show a => Show (LVal a) where
-    show (LVar x) = show x
-    show (LAttr x a) = show x ++ "." ++ show a
+instance Pretty Name where
+    pretty = text . show
 
-instance Show a => Show (Stmt a) where
-    show (VarDecl a x mExpr) = "var " ++ show x ++ " " ++ show a ++ mRHS
+instance Show a => Pretty (LVal a) where
+    pretty (LVar x) = pretty x
+    pretty (LAttr x a) = pretty x <> dot <> pretty a
+
+instance Show a => Pretty (Stmt a) where
+    pretty (VarDecl a x mExpr) = text "var" <+> pretty x <+> text (show a) <> mRHS
         where
             mRHS = case mExpr of
-                Nothing -> ";"
-                Just e  -> " = " ++ show e ++ ";"
-    show (Assign a x expr) = show x ++ " " ++ show a ++ " = " ++ show expr ++ ";"
-    show (If a e s1 s2) = "if (" ++ show e ++ ") " ++ show a ++
-                          " {\n" ++ indent (show s1) ++ "} else {\n" ++ indent (show s2) ++ "}"
-    show (While a e s) = "while (" ++ show e ++ ") " ++ show a ++ "{\n" ++ indent (show s) ++ "}"
-    show (BreakStmt a) = "break " ++ show a ++ ";"
-    show (ContStmt a) = "continue " ++ show a ++ ";"
-    show (Skip a) = "skip " ++ show a ++ ";"
-    show (ReturnStmt a mExpr) = case mExpr of
-        Nothing -> "return " ++ show a ++ ";"
-        Just e  -> "return " ++ show a ++ " " ++ show e ++ ";"
-    show (Seq s1 s2) = show s1 ++ "\n" ++ show s2
-    show (TryStmt l s exit Nothing) = "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} " ++ show exit
-    show (TryStmt l s exit (Just (lc, e, sc))) =
-        "try " ++ show l ++ " {\n" ++ indent (show s) ++ "} " ++ show exit ++ " catch " ++
-        show lc ++ " (" ++ show e ++ ") {\n" ++ indent (show sc) ++ "}"
-    show (ThrowStmt l e) = "throw " ++ show l ++ " " ++ show e ++ ";"
-    show (InvokeStmt l e n args) = show l ++ "(" ++ show e ++ ")." ++ show n ++ "(" ++ sepByComma (map show args) ++ ")"
+                Nothing -> semi
+                Just e  -> space <> equals <+> pretty e <> semi
 
-instance Show a => Show (Expr a) where
-    show (PrimLit prim) = show prim
-    show (ObjExpr dict) = "{ " ++ sepByComma (map showEntry dict)++ " }"
+    pretty (Assign a x expr) = pretty x <+> text (show a) <+> equals <+> pretty expr <> semi
+
+    pretty (If a e s1 s2) = text "if (" <> pretty e <> text ")" <+> text (show a) <+>
+                            braces (line <> indent 4 (pretty s1)) <+> text "else" <+>
+                            braces (line <> indent 4 (pretty s2))
+
+    pretty (While a e s) = text "while" <+> parens (pretty e) <+> text (show a) <>
+                           braces (line <> indent 4 (pretty s))
+
+    pretty (BreakStmt a) = text "break" <+> text (show a) <> semi
+
+    pretty (ContStmt a) = text "continue" <+> text (show a) <> semi
+
+    pretty (Skip a) = text "skip" <+> text (show a) <> semi
+
+    pretty (ReturnStmt a mExpr) = case mExpr of
+        Nothing -> text "return" <+> text (show a) <> semi
+        Just e  -> text "return" <+> text (show a) <+> pretty e <> semi
+
+    pretty (Seq s1 s2) = pretty s1 <> line <> pretty s2
+
+    pretty (TryStmt l s exit Nothing) =
+        text "try" <+> text (show l) <+>
+        braces (line <> indent 4 (pretty s)) <+> text (show exit)
+
+    pretty (TryStmt l s exit (Just (lc, e, sc))) =
+        text "try" <+> text (show l) <+> braces (line <> indent 4 (pretty s)) <+>
+        text (show exit) <> text "catch" <+>
+        text (show lc) <+> parens (pretty e) <+> braces (line <> indent 4 (pretty sc))
+
+    pretty (ThrowStmt l e) = text "throw" <+> text (show l) <+> pretty e <> semi
+
+    pretty (InvokeStmt l e n args) = text (show l) <> parens (pretty e) <> dot <> pretty n <>
+                                     encloseSep lparen rparen (comma <> space) (map pretty args)
+
+instance Show a => Pretty (Expr a) where
+    pretty (PrimLit prim) = pretty prim
+    pretty (ObjExpr dict) = encloseSep lbrace rbrace (comma <> space) (map prettyEntry dict)
         where
-            showEntry (name, expr) = show name ++ " : " ++ show expr
-    show (VarExpr x) = show x
-    show (GetExpr e x) = "(" ++ show e ++ ")." ++ show x
-    show (InfixExpr e1 op e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
-    show (CallExpr e args) = "(" ++ show e ++ ")(" ++ sepByComma (map show args) ++ ")"
-    show (Closure a args body) = "function " ++ show a ++ " (" ++ sepByComma (map show args) ++ ") {\n" ++ indent (show body) ++ "}"
+            prettyEntry (name, expr) = pretty name <+> colon <+> pretty expr
+    pretty (VarExpr x) = pretty x
+    pretty (GetExpr e x) = parens (pretty e) <> dot <> pretty x
+    pretty (InfixExpr e1 op e2) = parens (pretty e1 <+> pretty op <+> pretty e2)
+    pretty (CallExpr e args) = parens (pretty e) <> encloseSep lparen rparen (comma <> space) (map pretty args)
+    pretty (Closure a args body) = text "function" <+> text (show a) <+> 
+                                   encloseSep lparen rparen (comma <> space) (map pretty args) <+>
+                                   braces (line <> indent 4 (pretty body))
 
-instance Show InfixOp where
-    show OPlus = "+"
-    show OSubs = "-"
-    show ODiv  = "/"
-    show OMult = "*"
-
-sepByComma :: [String] -> String
-sepByComma [] = ""
-sepByComma [x] = x
-sepByComma (x:xs) = x ++ ", " ++ sepByComma xs
-
-indent :: String -> String
-indent = unlines . map ("  " ++) . lines
+instance Pretty InfixOp where
+    pretty OPlus = text "+"
+    pretty OSubs = text "-"
+    pretty ODiv  = text "/"
+    pretty OMult = text "*"
 
 -- Flow implementation
 
@@ -148,7 +165,7 @@ instance Label a => Flow Stmt a where
         flow sc `union` S.singleton (Edge (lc, entryLabel sc)) `union`
         S.map (\l' -> ExitTry (l', exit) l) (exitLabels s) `union`
         S.singleton (EnterTry (l, entryLabel s) (lc, e))
-    flow _              = empty
+    flow _              = S.empty
 
 scanCont :: Stmt a -> (a -> b) -> [b]
 scanCont (ContStmt l) f = [f l]
@@ -180,3 +197,7 @@ labelsOf s = case s of
                     -> M.singleton l s `M.union` labelsOf s' `M.union` labelsOf sc
     ThrowStmt l _   -> M.singleton l s
     InvokeStmt l _ _ _ -> M.singleton l s
+
+
+prettyPrint :: Pretty a => a -> String
+prettyPrint = show . pretty

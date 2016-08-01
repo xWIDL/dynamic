@@ -26,6 +26,12 @@ instance Domain ABool where
         in [ JAssert b (equalsTo b (PBool True))
            , JAssert b (equalsTo b (PBool False)) ]
 
+    reflect _ (isTrue:isFalse:[])
+        | isTrue && isFalse     = TopBool
+        | isTrue && not isFalse = TrueBool
+        | not isTrue && isFalse = FalseBool
+        | otherwise             = BotBool
+
 instance Hom ABool Bool where
     hom TrueBool  = True
     hom FalseBool = False

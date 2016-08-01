@@ -23,6 +23,7 @@ executable dynamic
                        Core.Flow
                        Core.Abstract
                        Core.Coercion
+                       Core.Domain
                        APrim
                        Primitive
                        Primitive.Bool

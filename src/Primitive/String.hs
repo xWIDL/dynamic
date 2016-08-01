@@ -27,6 +27,12 @@ instance Domain AString where
         in [ JAssert s (equalsTo s (PString ""))
            , JAssert s (notEqualsTo s (PString "")) ]
 
+    reflect _ (ee:nee:[])
+        | ee && not nee = EmptyString
+        | not ee && nee = NonEmptyString
+        | ee && nee     = TopString
+        | otherwise     = BotString
+
 instance Hom AString String where
     hom EmptyString    = ""
     hom NonEmptyString = "s"
