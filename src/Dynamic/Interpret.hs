@@ -31,12 +31,12 @@ type InterpretResult label p = (Either String (GoResult label p, InterpretState 
 
 -- | Interpret program starting from a specific block
 interpret :: (Label label, Abstract p, Hom p Prim) =>
-             Bool -> label -> Stmt label -> IO (InterpretResult label p)
-interpret connected start prog = do
+             Domains -> Bool -> label -> Stmt label -> IO (InterpretResult label p)
+interpret domains connected start prog = do
     let cursor = Cursor TopLevel [] (Edge (start, entryLabel prog)) []
     if connected
         then do
-            startSession $ \port -> do
+            startSession domains $ \port -> do
                 let initState = InterpretState {
                     _envMap = M.singleton (start, TopLevel, []) initEnv,
                     _platPort = Just port,
@@ -317,7 +317,7 @@ interpretExpr l (CallExpr e args) =
             if connected
                 then do
                     port <- fromJust . _platPort <$> get
-                    vals <- mapM (interpretExpr l) args
+                    args' <- mapM (interpretExpr l) args
 
                     -- XXX: env setting like this looks verbose to me, can we fix that?
                     cursor <- _cursor <$> get
@@ -326,7 +326,7 @@ interpretExpr l (CallExpr e args) =
                     let (l1, l2) = getEdgePair cursor
                     env <- (_envMap <$> get) >>= lookupM (l1, chain, cstr)
 
-                    reply <- liftIO $ invoke port (LInterface name) f (map (valToJsExpr env) vals)
+                    reply <- liftIO $ eval port (JCall (LInterface name) f (map (valToJsExpr env) args'))
                     case reply of
                         Sat Nothing -> return $ VPrim (hom PUndefined)
                         Replies primTy assertResults ->

@@ -5,12 +5,14 @@ Description : Abstract primitive type
 
 {-# LANGUAGE TemplateHaskell, PolyKinds, AllowAmbiguousTypes, UndecidableInstances, RecordWildCards #-}
 
-module APrim (APrim, selectABool, Match(..)) where
+module APrim (APrim, selectABool, aPrimDomains, Match(..)) where
 
 import Core.Abstract
 import Core.Coercion
+import Core.Domain
 import JS.AST
 import Language.JS.Type
+import Language.JS.Platform
 import Common
 import Primitive
 import Control.Lens (makeLenses, Lens', (.~))
@@ -176,3 +178,11 @@ instance Hom ABool [AString] where
     hom BotBool = [bot]
     hom TrueBool = [NonEmptyString]
     hom FalseBool = [EmptyString]
+
+aPrimDomains :: Domains
+aPrimDomains = Domains [
+    (PTyBool, domainsOf (Proxy :: Proxy ABool)),
+    (PTyInt, domainsOf (Proxy :: Proxy ANum)),
+    (PTyDouble, domainsOf (Proxy :: Proxy ANum)),
+    (PTyString, domainsOf (Proxy :: Proxy AString))
+  ]
